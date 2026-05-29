@@ -47,43 +47,31 @@ export function renderWaiting(room, myIndex) {
   }
 }
 
-// 籌碼視覺點點（8顆）
-function chipDots(chips, startingChips) {
-  const ratio = startingChips > 0 ? chips / startingChips : 0;
-  const filled = Math.round(Math.min(ratio, 1) * 8);
-  let html = '';
-  for (let i = 0; i < 8; i++) {
-    html += `<span class="chip-dot ${i < filled ? 'on' : 'off'}"></span>`;
-  }
-  return html;
-}
 
-// 玩家列表（遊戲中）
+// 牌桌（橢圓佈局 + 真實籌碼圖示）
 export function renderPlayerList(room, hand, myIndex) {
-  const container = document.getElementById('player-list');
-  container.innerHTML = '';
+  const seats = document.getElementById('player-seats');
+  seats.innerHTML = '';
+
   const players = Object.values(room.players || {});
-  const seats = hand?.seats || [];
-  const startingChips = room.config?.startingChips || 1;
+  const handSeats = hand?.seats || [];
+  const n = players.length;
   const dealerIdx = hand?.dealerIndex ?? 0;
 
   players.forEach((p, i) => {
-    const seat = seats[i] || {};
+    const hs = handSeats[i] || {};
     const isMe = i === myIndex;
     const isDealer = i === dealerIdx;
-    const isSB = i === ((dealerIdx + 1) % players.length);
-    const isBB = i === ((dealerIdx + 2) % players.length);
+    const isSB = n > 2 ? i === ((dealerIdx + 1) % n) : i !== dealerIdx;
+    const isBB = n > 2 ? i === ((dealerIdx + 2) % n) : false;
     const isAction = i === hand?.actionIndex;
-    const status = seat.status || 'active';
+    const status = hs.status || 'active';
 
-    const row = document.createElement('div');
-    row.className = [
-      'player-row',
-      isMe ? 'me' : '',
-      isAction ? 'acting' : '',
-      status === 'folded' ? 'folded' : '',
-      status === 'allin' ? 'allin' : '',
-    ].filter(Boolean).join(' ');
+    const { x, y } = seatPos(i, n);
+    const el = document.createElement('div');
+    el.className = ['player-seat', isMe ? 'me' : '', isAction ? 'acting' : '', status === 'folded' ? 'folded' : ''].filter(Boolean).join(' ');
+    el.style.left = x + '%';
+    el.style.top = y + '%';
 
     const badges = [
       isDealer ? '<span class="badge badge-d">D</span>' : '',
@@ -92,27 +80,75 @@ export function renderPlayerList(room, hand, myIndex) {
       status === 'allin' ? '<span class="badge badge-allin">全下</span>' : '',
     ].join('');
 
-    const betDisplay = seat.bet > 0 ? `<span class="seat-bet">+${seat.bet.toLocaleString()}</span>` : '';
+    const betHtml = hs.bet > 0
+      ? `<div class="seat-bet-chip">+${hs.bet.toLocaleString()}</div>`
+      : '';
 
-    row.innerHTML = `
-      <div class="player-info">
-        <span class="player-name">${p.name}${badges}</span>
-        <div class="chip-dots">${chipDots(p.chips, startingChips)}</div>
+    el.innerHTML = `
+      <div class="seat-inner">
+        <div class="seat-avatar">${p.name[0].toUpperCase()}</div>
+        <div class="seat-name">${p.name.slice(0, 7)}</div>
+        <div class="chip-stacks">${buildChipStacks(p.chips)}</div>
+        <div class="seat-amount">${p.chips.toLocaleString()}</div>
+        ${betHtml}
       </div>
-      <div class="player-chips">
-        <span class="chip-count">${p.chips.toLocaleString()}</span>
-        ${betDisplay}
-      </div>`;
-    container.appendChild(row);
+      <div class="seat-badges">${badges}</div>`;
+    seats.appendChild(el);
   });
 }
 
-// 底池 + 輪次
+// 底池 + 輪次（更新牌桌中央 + header）
 export function renderPot(hand) {
-  document.getElementById('pot-amount').textContent = (hand?.pot || 0).toLocaleString();
+  const pot = (hand?.pot || 0).toLocaleString();
+  const el = document.getElementById('table-pot-val');
+  if (el) el.textContent = pot;
+  const el2 = document.getElementById('pot-amount');
+  if (el2) el2.textContent = pot;
+
   const roundNames = { preflop: '翻牌前', flop: '翻牌', turn: '轉牌', river: '河牌' };
-  document.getElementById('round-name').textContent = roundNames[hand?.round] || '';
-  document.getElementById('hand-number').textContent = `第 ${hand?.number || 1} 局`;
+  const rName = roundNames[hand?.round] || '';
+  const rl = document.getElementById('table-round-label');
+  if (rl) rl.textContent = rName;
+  const rn = document.getElementById('round-name');
+  if (rn) rn.textContent = rName;
+  const hn = document.getElementById('hand-number');
+  if (hn) hn.textContent = `第 ${hand?.number || 1} 局`;
+}
+
+// ── 工具：座位位置 ──
+function seatPos(i, n) {
+  const angle = (Math.PI / 2) + (2 * Math.PI * i / n);
+  return {
+    x: 50 + 46 * Math.cos(angle),
+    y: 50 - 40 * Math.sin(angle),
+  };
+}
+
+// ── 工具：籌碼堆疊 ──
+const DENOMS = [
+  { val: 5000, cls: 'chip-yellow' },
+  { val: 1000, cls: 'chip-purple' },
+  { val: 500,  cls: 'chip-black'  },
+  { val: 100,  cls: 'chip-green'  },
+  { val: 25,   cls: 'chip-blue'   },
+  { val: 5,    cls: 'chip-red'    },
+  { val: 1,    cls: 'chip-white'  },
+];
+
+function buildChipStacks(chips) {
+  if (chips <= 0) return '<div class="no-chips">bust</div>';
+  let rem = chips;
+  const stacks = [];
+  for (const d of DENOMS) {
+    if (rem >= d.val && stacks.length < 4) {
+      const cnt = Math.min(Math.floor(rem / d.val), 5);
+      if (cnt > 0) { stacks.push({ cls: d.cls, cnt }); rem -= cnt * d.val; }
+    }
+    if (stacks.length >= 4) break;
+  }
+  return stacks.map(s =>
+    `<div class="chip-col">${Array(s.cnt).fill(`<div class="chip-token ${s.cls}"></div>`).join('')}</div>`
+  ).join('');
 }
 
 // 行動面板

@@ -237,46 +237,157 @@ input:focus { border-color: var(--red); }
   cursor: pointer;
 }
 
-/* 玩家列表 */
-#player-list {
-  padding: 8px 12px;
+/* ─────────────── 牌桌 ─────────────── */
+#table-wrapper {
+  position: relative;
+  width: 100%;
+  padding-top: 52%;
+  flex-shrink: 0;
+}
+#table-felt {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 7%;
+  bottom: 7%;
+  background: radial-gradient(ellipse at center, #2e7d32 0%, #1b5e20 55%, #0d3d0d 100%);
+  border-radius: 50%;
+  border: 5px solid #6d4c41;
+  box-shadow:
+    inset 0 0 30px rgba(0,0,0,0.45),
+    0 0 0 3px #4e342e,
+    0 6px 24px rgba(0,0,0,0.8);
+}
+#table-center {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  flex-shrink: 0;
-  max-height: 38vh;
-  overflow-y: auto;
-}
-.player-row {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: var(--panel);
-  border-radius: 8px;
-  padding: 8px 10px;
-  border-left: 3px solid transparent;
-  transition: border-color .2s;
+  justify-content: center;
+  gap: 1px;
 }
-.player-row.acting  { border-left-color: var(--gold); }
-.player-row.folded  { opacity: 0.35; }
-.player-row.me      { background: #1e1200; }
-.player-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.player-name {
-  font-size: 14px;
+.table-pot-label { font-size: 10px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; }
+#table-pot-val   { font-size: 18px; font-weight: 700; color: var(--gold); }
+#table-round-label { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 1px; }
+
+/* 玩家座位 */
+#player-seats { position: absolute; inset: 0; }
+.player-seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 66px;
+  text-align: center;
+  z-index: 10;
+}
+.player-seat.folded { opacity: 0.38; }
+.seat-inner {
+  background: rgba(15,15,15,0.88);
+  border: 1.5px solid #333;
+  border-radius: 8px;
+  padding: 4px 5px 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.player-seat.acting .seat-inner {
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(255,215,0,0.45);
+}
+.player-seat.me .seat-inner {
+  border-color: var(--gold-dim);
+  background: rgba(30,18,0,0.92);
+}
+.seat-avatar {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--red-dark);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.player-seat.me .seat-avatar { background: #7a5500; }
+.seat-name {
+  font-size: 10px;
   font-weight: 600;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 58px;
+  line-height: 1;
 }
-.player-row.me .player-name { color: var(--gold); }
-.player-row.folded .player-name { text-decoration: line-through; }
-.chip-dots { display: flex; gap: 3px; }
-.chip-dot  { width: 9px; height: 9px; border-radius: 50%; }
-.chip-dot.on  { background: var(--chip-on); }
-.chip-dot.off { background: var(--chip-off); border: 1px solid #333; }
-.player-chips { text-align: right; flex-shrink: 0; margin-left: 8px; }
-.chip-count  { font-size: 15px; font-weight: 700; display: block; }
-.seat-bet    { font-size: 12px; color: var(--gold-dim); display: block; }
+.player-seat.me .seat-name { color: var(--gold); }
+.player-seat.folded .seat-name { text-decoration: line-through; color: var(--text-dim); }
+.seat-amount {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ddd;
+  line-height: 1;
+}
+.seat-bet-chip {
+  font-size: 9px;
+  color: var(--gold-dim);
+  margin-top: 1px;
+}
+.seat-badges { display: flex; justify-content: center; gap: 2px; margin-top: 2px; flex-wrap: wrap; }
+
+/* ── 籌碼圖示 ── */
+.chip-stacks {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 22px;
+}
+.chip-col {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 0;
+}
+.chip-token {
+  width: 14px;
+  height: 7px;
+  border-radius: 50%;
+  position: relative;
+  margin-top: -3px;
+  box-sizing: border-box;
+}
+/* 第一顆（底部）顯示正圓 */
+.chip-col .chip-token:first-child {
+  height: 14px;
+  border-radius: 50%;
+  margin-top: 0;
+}
+/* 疊加效果 */
+.chip-col .chip-token:not(:first-child) {
+  height: 5px;
+  border-radius: 40%;
+  margin-top: -2px;
+}
+/* 顏色 */
+.chip-white  { background: #d8d8d8; border: 1.5px solid #999; }
+.chip-red    { background: #cc2200; border: 1.5px solid #ff6644; }
+.chip-green  { background: #1a6b1a; border: 1.5px solid #44bb44; }
+.chip-blue   { background: #0044cc; border: 1.5px solid #4488ff; }
+.chip-black  { background: #2a2a2a; border: 1.5px solid #666; }
+.chip-purple { background: #6600aa; border: 1.5px solid #aa44dd; }
+.chip-yellow { background: #cc9900; border: 1.5px solid #ffdd44; }
+.no-chips    { font-size: 9px; color: var(--red); font-weight: 700; }
+
+/* 下注籌碼（座位旁） */
+.bet-tokens {
+  position: absolute;
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+}
 
 /* badges */
 .badge {

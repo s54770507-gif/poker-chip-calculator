@@ -52,6 +52,7 @@ function bindEvents() {
   // 等待室
   document.getElementById('btn-start-game').addEventListener('click', onStartGame);
   document.getElementById('btn-leave-room').addEventListener('click', onLeaveRoom);
+  document.getElementById('btn-leave-hand').addEventListener('click', onLeaveRoom);
   document.getElementById('room-code-badge').addEventListener('click', () => {
     const code = myRoomCode || '';
     if (!code) return;
