@@ -237,20 +237,21 @@ input:focus { border-color: var(--red); }
   cursor: pointer;
 }
 
-/* ─────────────── 牌桌（直式填滿）─────────────── */
+/* ─────────────── 牌桌（自動填滿）─────────────── */
 #table-wrapper {
   position: relative;
+  flex: 1;
+  min-height: 160px;
   width: 100%;
-  height: 44vh;
-  flex-shrink: 0;
   z-index: 1;
+  overflow: visible;
 }
 #table-felt {
   position: absolute;
-  left: 16%;
-  right: 16%;
-  top: 3%;
-  bottom: 3%;
+  left: 14%;
+  right: 14%;
+  top: 4%;
+  bottom: 4%;
   background: radial-gradient(ellipse at center, #2e7d32 0%, #1b5e20 55%, #0d3d0d 100%);
   border-radius: 50%;
   border: 5px solid #6d4c41;
@@ -395,37 +396,33 @@ input:focus { border-color: var(--red); }
 
 /* 行動面板 */
 #action-area {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 14px 12px;
+  flex-shrink: 0;
+  padding: 6px 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   position: relative;
   z-index: 5;
   background: var(--bg);
-  min-height: 0;
 }
 #actor-label {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-dim);
   text-align: center;
-  padding: 4px 0;
+  padding: 2px 0;
   flex-shrink: 0;
 }
-#actor-label.my-turn { color: var(--gold); font-weight: 700; font-size: 16px; }
-#actor-name { font-size: 18px; font-weight: 700; text-align: center; min-height: 22px; }
-#waiting-msg { font-size: 14px; color: var(--text-dim); text-align: center; padding: 6px 0; }
+#actor-label.my-turn { color: var(--gold); font-weight: 700; font-size: 15px; }
+#actor-name { font-size: 17px; font-weight: 700; text-align: center; min-height: 20px; }
+#waiting-msg { font-size: 14px; color: var(--text-dim); text-align: center; padding: 4px 0; }
 #action-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  flex: 1;
 }
 .action-btn {
   width: 100%;
-  height: 100%;
-  min-height: 60px;
+  min-height: 58px;
   border: none;
   border-radius: 12px;
   font-size: 18px;
