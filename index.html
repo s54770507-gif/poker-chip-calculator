@@ -158,6 +158,13 @@
         </div>
       </div>
 
+      <!-- 等待開始面板（遊戲未開始時顯示） -->
+      <div id="pre-game-panel" style="display:none">
+        <div id="pregame-status" class="pregame-status"></div>
+        <button id="btn-start-now" class="btn btn-gold" style="display:none">開始遊戲</button>
+        <div id="pregame-waiting" class="pregame-waiting" style="display:none">等待房主開始遊戲...</div>
+      </div>
+
       <button id="btn-show-history-hand" class="btn btn-secondary btn-history" style="display:none;flex-shrink:0">查看歷史紀錄</button>
       <button id="btn-leave-hand" class="btn btn-secondary" style="flex-shrink:0;opacity:0.5;font-size:13px;padding:10px">離開房間</button>
     </div>
@@ -206,14 +213,21 @@
 
 </div><!-- #app -->
 
-<!-- 加入房間 overlay -->
+<!-- 加入房間 / 切換玩家 overlay -->
 <div id="player-select-overlay" class="overlay hidden">
   <div class="overlay-box">
-    <h2>加入房間</h2>
-    <p id="join-room-info">輸入你的名字</p>
-    <input type="text" id="join-name-input" maxlength="10" placeholder="你的名字" autocomplete="off" style="margin-bottom:10px">
-    <button id="btn-confirm-join" class="btn btn-gold">加入</button>
-    <button id="btn-cancel-join" class="btn btn-secondary" style="margin-top:8px">取消</button>
+    <div id="join-mode">
+      <h2>加入房間</h2>
+      <p id="join-room-info">輸入你的名字</p>
+      <input type="text" id="join-name-input" maxlength="10" placeholder="你的名字" autocomplete="off" style="margin-bottom:10px">
+      <button id="btn-confirm-join" class="btn btn-gold">加入</button>
+      <button id="btn-cancel-join" class="btn btn-secondary" style="margin-top:8px">取消</button>
+    </div>
+    <div id="switch-mode" style="display:none">
+      <h2>切換玩家</h2>
+      <div id="player-select-list" style="display:flex;flex-direction:column;gap:8px;margin:12px 0"></div>
+      <button id="btn-cancel-switch" class="btn btn-secondary" style="margin-top:4px">取消</button>
+    </div>
   </div>
 </div>
 

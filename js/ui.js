@@ -41,11 +41,32 @@ export function renderPlayerList(room, hand, myIndex) {
   seats.innerHTML = '';
 
   const players = Object.values(room.players || {});
+  const totalSlots = room.config?.playerCount || players.length;
   const handSeats = hand?.seats || [];
-  const n = players.length;
+  const n = totalSlots;                       // 以總位數排列座位
   const dealerIdx = hand?.dealerIndex ?? 0;
 
-  players.forEach((p, i) => {
+  // 渲染所有座位（包含空位）
+  for (let i = 0; i < totalSlots; i++) {
+    const p = players[i];
+    const isEmpty = !p;
+
+    if (isEmpty) {
+      const { x, y } = seatPos(i, n);
+      const el = document.createElement('div');
+      el.className = 'player-seat empty';
+      el.style.left = x + '%';
+      el.style.top = y + '%';
+      el.innerHTML = `
+        <div class="seat-inner">
+          <div class="seat-avatar">?</div>
+          <div class="seat-name">等待加入</div>
+          <div class="seat-amount">─</div>
+        </div>`;
+      seats.appendChild(el);
+      continue;
+    }
+
     const hs = handSeats[i] || {};
     const isMe = i === myIndex;
     const isDealer = i === dealerIdx;
@@ -81,7 +102,7 @@ export function renderPlayerList(room, hand, myIndex) {
       </div>
       <div class="seat-badges">${badges}</div>`;
     seats.appendChild(el);
-  });
+  }
 }
 
 // 底池 + 輪次（更新牌桌中央 + header）

@@ -50,6 +50,7 @@ function bindEvents() {
 
   // 等待室
   document.getElementById('btn-start-game').addEventListener('click', onStartGame);
+  document.getElementById('btn-start-now').addEventListener('click', onStartGame);
   document.getElementById('btn-leave-room').addEventListener('click', onLeaveRoom);
   document.getElementById('btn-leave-hand').addEventListener('click', onLeaveRoom);
   document.getElementById('room-code-badge').addEventListener('click', () => {
@@ -69,6 +70,8 @@ function bindEvents() {
       btn.textContent = p.name + (i === myPlayerIndex ? ' ✓' : '');
       btn.addEventListener('click', () => {
         document.getElementById('player-select-overlay').classList.add('hidden');
+        document.getElementById('join-mode').style.display = '';
+        document.getElementById('switch-mode').style.display = 'none';
         myPlayerIndex = i;
         saveLocal(myRoomCode, i);
         renderRoom(currentRoom);
@@ -76,7 +79,14 @@ function bindEvents() {
       });
       list.appendChild(btn);
     });
+    document.getElementById('join-mode').style.display = 'none';
+    document.getElementById('switch-mode').style.display = '';
     document.getElementById('player-select-overlay').classList.remove('hidden');
+  });
+  document.getElementById('btn-cancel-switch').addEventListener('click', () => {
+    document.getElementById('player-select-overlay').classList.add('hidden');
+    document.getElementById('join-mode').style.display = '';
+    document.getElementById('switch-mode').style.display = 'none';
   });
   document.getElementById('btn-confirm-join').addEventListener('click', doJoinRoom);
   document.getElementById('join-name-input').addEventListener('keydown', e => {
@@ -255,8 +265,10 @@ function renderRoom(room) {
   const hand = room.hand;
   switch (room.status) {
     case 'waiting':
-      renderWaiting(room, myPlayerIndex);
-      showPhase('waiting');
+      renderPlayerList(room, null, myPlayerIndex);
+      renderPot(null);
+      renderPreGame(room, myPlayerIndex);
+      showPhase('hand');
       break;
     case 'playing':
       if (hand?.round === 'showdown') {
@@ -266,6 +278,7 @@ function renderRoom(room) {
         renderHistory(room);
         showPhase('showdown');
       } else {
+        showGameControls();
         renderPlayerList(room, hand, myPlayerIndex);
         renderPot(hand);
         renderActionPanel(room, hand, myPlayerIndex);
@@ -276,11 +289,47 @@ function renderRoom(room) {
   }
 }
 
+function renderPreGame(room, myIndex) {
+  const players = Object.values(room.players || {});
+  const total = room.config?.playerCount || 0;
+  const joined = players.length;
+  const isHost = myIndex === 0;
+
+  // 隱藏遊戲行動，顯示等待面板
+  document.getElementById('action-buttons').style.display = 'none';
+  document.getElementById('waiting-msg').style.display = 'none';
+  document.getElementById('actor-label').style.display = 'none';
+  document.getElementById('raise-panel').classList.add('hidden');
+  document.getElementById('pre-game-panel').style.display = 'flex';
+
+  document.getElementById('pregame-status').textContent = `${joined} / ${total} 玩家已就座`;
+
+  const startBtn = document.getElementById('btn-start-now');
+  const waitingMsg = document.getElementById('pregame-waiting');
+  if (isHost && joined >= 2) {
+    startBtn.style.display = 'block';
+    waitingMsg.style.display = 'none';
+  } else if (isHost) {
+    startBtn.style.display = 'none';
+    waitingMsg.style.display = 'block';
+    waitingMsg.textContent = '等待更多玩家加入...';
+  } else {
+    startBtn.style.display = 'none';
+    waitingMsg.style.display = 'block';
+    waitingMsg.textContent = '等待房主開始遊戲...';
+  }
+}
+
+function showGameControls() {
+  document.getElementById('pre-game-panel').style.display = 'none';
+  document.getElementById('actor-label').style.display = '';
+}
+
 // ── 開始遊戲 ──────────────────────────────────────────────
 async function onStartGame() {
   const room = await dbGet(roomRef(myRoomCode));
   const joined = Object.keys(room.players || {}).length;
-  if (joined < room.config.playerCount) { showToast('玩家尚未全部加入', 'error'); return; }
+  if (joined < 2) { showToast('至少需要 2 位玩家', 'error'); return; }
 
   await dbUpdate(roomRef(myRoomCode), { status: 'playing' });
   await startHand();

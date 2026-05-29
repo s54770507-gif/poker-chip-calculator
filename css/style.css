@@ -437,6 +437,40 @@ input:focus { border-color: var(--red); }
 #btn-call         { background: var(--btn-call); }
 #btn-raise-toggle { background: var(--btn-raise); }
 
+/* 等待開始面板 */
+#pre-game-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.pregame-status {
+  text-align: center;
+  font-size: 15px;
+  color: var(--text-dim);
+  padding: 4px 0;
+}
+.pregame-waiting {
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-dim);
+  padding: 8px 0;
+}
+
+/* 空位（虛線） */
+.player-seat.empty { opacity: 1; }
+.player-seat.empty .seat-inner {
+  border: 1.5px dashed #333;
+  background: rgba(10,10,10,0.6);
+}
+.player-seat.empty .seat-avatar {
+  background: #222;
+  color: #444;
+  font-size: 12px;
+}
+.player-seat.empty .seat-name { color: #444; }
+.player-seat.empty .seat-amount { color: #333; }
+
 /* 加注面板 */
 #raise-panel { display: flex; flex-direction: column; gap: 8px; }
 #raise-panel.hidden { display: none; }
