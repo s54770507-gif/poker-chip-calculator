@@ -4,13 +4,13 @@
 //        → 複製 firebaseConfig 物件貼到下方
 // ============================================================
 export const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "YOUR_PROJECT",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyCsM7GUdQhAsaxJedoIp2l7SMi2EAj8SL4",
+  authDomain: "poker-chip-calculator.firebaseapp.com",
+  databaseURL: "https://poker-chip-calculator-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "poker-chip-calculator",
+  storageBucket: "poker-chip-calculator.firebasestorage.app",
+  messagingSenderId: "47302069321",
+  appId: "1:47302069321:web:1e759f76d9c3f2c10f0398"
 };
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
