@@ -52,6 +52,26 @@ function bindEvents() {
   // 等待室
   document.getElementById('btn-start-game').addEventListener('click', onStartGame);
   document.getElementById('btn-leave-room').addEventListener('click', onLeaveRoom);
+  document.getElementById('btn-switch-player').addEventListener('click', () => {
+    if (!myRoomCode || !currentRoom) return;
+    const players = Object.values(currentRoom.players || {});
+    const list = document.getElementById('player-select-list');
+    list.innerHTML = '';
+    players.forEach((p, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'player-select-btn';
+      btn.textContent = p.name + (i === myPlayerIndex ? ' ✓' : '');
+      btn.addEventListener('click', () => {
+        document.getElementById('player-select-overlay').classList.add('hidden');
+        myPlayerIndex = i;
+        saveLocal(myRoomCode, i);
+        renderRoom(currentRoom);
+        showToast(`切換為 ${p.name}`);
+      });
+      list.appendChild(btn);
+    });
+    document.getElementById('player-select-overlay').classList.remove('hidden');
+  });
   document.getElementById('btn-cancel-join').addEventListener('click', () => {
     document.getElementById('player-select-overlay').classList.add('hidden');
   });
@@ -202,6 +222,11 @@ function subscribeRoom(code) {
 }
 
 function renderRoom(room) {
+  // 更新「你是誰」bar
+  const players = Object.values(room.players || {});
+  const myNameEl = document.getElementById('my-player-name');
+  if (myNameEl) myNameEl.textContent = players[myPlayerIndex]?.name || '─';
+
   const hand = room.hand;
   switch (room.status) {
     case 'waiting':

@@ -201,6 +201,28 @@ input:focus { border-color: var(--red); }
 #pot-display { font-size: 16px; color: var(--text); font-weight: 600; }
 #pot-display span.pot-val { color: var(--gold); }
 
+/* 我是誰 bar */
+#my-player-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 14px;
+  background: #110800;
+  border-bottom: 1px solid #2e1a00;
+  flex-shrink: 0;
+}
+#my-player-name { font-size: 13px; color: var(--gold-dim); }
+#my-player-name::before { content: '你是：'; color: var(--text-dim); }
+#btn-switch-player {
+  font-size: 12px;
+  padding: 4px 10px;
+  background: #2a1800;
+  border: 1px solid #5a3800;
+  border-radius: 6px;
+  color: var(--gold-dim);
+  cursor: pointer;
+}
+
 /* 玩家列表 */
 #player-list {
   padding: 8px 12px;
