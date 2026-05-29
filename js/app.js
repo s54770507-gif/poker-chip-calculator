@@ -4,7 +4,7 @@ import {
 } from './firebase.js';
 
 import {
-  showPhase, showToast, renderNameInputs, renderWaiting,
+  showPhase, showToast, renderWaiting,
   renderPlayerList, renderPot, renderActionPanel, renderShowdown, renderHistory
 } from './ui.js';
 
@@ -43,7 +43,6 @@ function bindEvents() {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.count-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      renderNameInputs(+btn.dataset.count);
     });
   });
   document.getElementById('btn-create-room').addEventListener('click', onCreateRoom);
@@ -78,6 +77,10 @@ function bindEvents() {
       list.appendChild(btn);
     });
     document.getElementById('player-select-overlay').classList.remove('hidden');
+  });
+  document.getElementById('btn-confirm-join').addEventListener('click', doJoinRoom);
+  document.getElementById('join-name-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doJoinRoom();
   });
   document.getElementById('btn-cancel-join').addEventListener('click', () => {
     document.getElementById('player-select-overlay').classList.add('hidden');
@@ -129,35 +132,54 @@ function onClickCreate() {
 function onClickJoin() {
   const code = document.getElementById('room-code-input').value.trim().toUpperCase();
   if (code.length !== 6) { showToast('請輸入 6 碼房間代碼', 'error'); return; }
-  showPlayerSelectOverlay(code);
+  // 先確認房間存在再顯示 overlay
+  dbGet(roomRef(code)).then(room => {
+    if (!room) { showToast('找不到此房間', 'error'); return; }
+    if (room.status === 'finished') { showToast('此房間已結束', 'error'); return; }
+    const joined = Object.keys(room.players || {}).length;
+    const max = room.config?.playerCount || 0;
+    if (joined >= max) { showToast('房間已滿', 'error'); return; }
+    document.getElementById('join-room-info').textContent =
+      `房間代碼：${code}　(${joined}/${max} 人)`;
+    document.getElementById('join-name-input').value = '';
+    document.getElementById('player-select-overlay').classList.remove('hidden');
+    document.getElementById('join-name-input').focus();
+    // 儲存 code 備用
+    document.getElementById('btn-confirm-join').dataset.code = code;
+  }).catch(() => showToast('加入失敗，請重試', 'error'));
 }
 
-async function showPlayerSelectOverlay(code) {
+async function doJoinRoom() {
+  const code = document.getElementById('btn-confirm-join').dataset.code;
+  const name = document.getElementById('join-name-input').value.trim().slice(0, 10);
+  if (!name) { showToast('請輸入名字', 'error'); return; }
+  if (!code) return;
+  document.getElementById('player-select-overlay').classList.add('hidden');
   try {
     const room = await dbGet(roomRef(code));
     if (!room) { showToast('找不到此房間', 'error'); return; }
-    if (room.status === 'finished') { showToast('此房間已結束', 'error'); return; }
+    const startingChips = room.config.startingChips;
+    const playerCount = room.config.playerCount;
 
-    const players = Object.values(room.players || {});
-    const list = document.getElementById('player-select-list');
-    list.innerHTML = '';
-    players.forEach((p, i) => {
-      const btn = document.createElement('button');
-      btn.className = 'player-select-btn';
-      btn.textContent = p.name;
-      btn.addEventListener('click', () => {
-        document.getElementById('player-select-overlay').classList.add('hidden');
-        myRoomCode = code;
-        myPlayerIndex = i;
-        saveLocal(code, i);
-        subscribeRoom(code);
-        showPhase(room.status === 'playing' ? 'hand' : 'waiting');
-        showToast(`已加入為 ${p.name}`);
-      });
-      list.appendChild(btn);
+    // 用 transaction 安全搶位
+    let assignedIdx = null;
+    await dbTransaction(playersRef(code), (players) => {
+      if (!players) players = {};
+      const count = Object.keys(players).length;
+      if (count >= playerCount) return; // 已滿，放棄
+      assignedIdx = count;
+      players[count] = { name, chips: startingChips, isActive: true };
+      return players;
     });
 
-    document.getElementById('player-select-overlay').classList.remove('hidden');
+    if (assignedIdx === null) { showToast('房間已滿', 'error'); return; }
+
+    myRoomCode = code;
+    myPlayerIndex = assignedIdx;
+    saveLocal(code, assignedIdx);
+    subscribeRoom(code);
+    showPhase('waiting');
+    showToast(`歡迎 ${name}！`);
   } catch (e) {
     showToast('加入失敗，請重試', 'error');
     console.error(e);
@@ -166,28 +188,22 @@ async function showPlayerSelectOverlay(code) {
 
 // ── 建立房間 ──────────────────────────────────────────────
 async function onCreateRoom() {
+  const hostName = document.getElementById('host-name').value.trim().slice(0, 10) || '房主';
   const countBtn = document.querySelector('.count-btn.active');
   const playerCount = +countBtn.dataset.count;
   const startingChips = +document.getElementById('starting-chips').value || 5000;
   const smallBlind = +document.getElementById('small-blind').value || 25;
   const bigBlind = +document.getElementById('big-blind').value || 50;
 
-  const names = [];
-  for (let i = 0; i < playerCount; i++) {
-    const n = document.getElementById(`pname-${i}`)?.value.trim() || `玩家${i+1}`;
-    names.push(n.slice(0, 10));
-  }
-
   const code = generateCode();
-  const players = {};
-  names.forEach((name, i) => { players[i] = { name, chips: startingChips, isActive: true }; });
-
   const roomData = {
     code,
     status: 'waiting',
     createdAt: Date.now(),
     config: { playerCount, startingChips, smallBlind, bigBlind },
-    players,
+    players: {
+      0: { name: hostName, chips: startingChips, isActive: true }
+    },
     hand: null,
     history: {}
   };

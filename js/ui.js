@@ -12,19 +12,6 @@ export function showToast(msg, type = 'info') {
   t._timer = setTimeout(() => t.classList.remove('show'), 2800);
 }
 
-// 動態產生玩家名稱輸入欄位
-export function renderNameInputs(count) {
-  const container = document.getElementById('player-names');
-  container.innerHTML = '';
-  for (let i = 0; i < count; i++) {
-    const div = document.createElement('div');
-    div.className = 'name-input-row';
-    div.innerHTML = `<span class="name-label">玩家 ${i + 1}</span>
-      <input type="text" id="pname-${i}" maxlength="10" placeholder="名稱" autocomplete="off">`;
-    container.appendChild(div);
-  }
-}
-
 // 等待室：玩家列表
 export function renderWaiting(room, myIndex) {
   document.getElementById('room-code-display').textContent = room.code || '';

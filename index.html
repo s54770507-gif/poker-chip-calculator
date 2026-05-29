@@ -36,7 +36,11 @@
     </div>
     <div class="scroll-area">
       <div>
-        <div class="section-label">玩家人數</div>
+        <div class="section-label">你的名字</div>
+        <input type="text" id="host-name" maxlength="10" placeholder="輸入你的名字" autocomplete="off">
+      </div>
+      <div>
+        <div class="section-label">玩家人數（包含你）</div>
         <div class="count-btns">
           <button class="count-btn" data-count="2">2</button>
           <button class="count-btn" data-count="3">3</button>
@@ -48,10 +52,6 @@
           <button class="count-btn" data-count="9">9</button>
           <button class="count-btn" data-count="10">10</button>
         </div>
-      </div>
-      <div>
-        <div class="section-label">玩家名稱</div>
-        <div id="player-names"></div>
       </div>
       <div>
         <div class="section-label">起始籌碼</div>
@@ -206,13 +206,14 @@
 
 </div><!-- #app -->
 
-<!-- 選擇玩家 overlay -->
+<!-- 加入房間 overlay -->
 <div id="player-select-overlay" class="overlay hidden">
   <div class="overlay-box">
-    <h2>你是哪位玩家？</h2>
-    <p>點選你的名字</p>
-    <div id="player-select-list"></div>
-    <button id="btn-cancel-join" class="btn btn-secondary" style="margin-top:12px">取消</button>
+    <h2>加入房間</h2>
+    <p id="join-room-info">輸入你的名字</p>
+    <input type="text" id="join-name-input" maxlength="10" placeholder="你的名字" autocomplete="off" style="margin-bottom:10px">
+    <button id="btn-confirm-join" class="btn btn-gold">加入</button>
+    <button id="btn-cancel-join" class="btn btn-secondary" style="margin-top:8px">取消</button>
   </div>
 </div>
 
