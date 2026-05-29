@@ -241,15 +241,16 @@ input:focus { border-color: var(--red); }
 #table-wrapper {
   position: relative;
   width: 100%;
-  padding-top: 52%;
+  padding-top: 60%;
   flex-shrink: 0;
+  z-index: 1;
 }
 #table-felt {
   position: absolute;
-  left: 12%;
-  right: 12%;
-  top: 7%;
-  bottom: 7%;
+  left: 13%;
+  right: 13%;
+  top: 10%;
+  bottom: 10%;
   background: radial-gradient(ellipse at center, #2e7d32 0%, #1b5e20 55%, #0d3d0d 100%);
   border-radius: 50%;
   border: 5px solid #6d4c41;
@@ -272,40 +273,40 @@ input:focus { border-color: var(--red); }
 #table-round-label { font-size: 10px; color: rgba(255,255,255,0.45); margin-top: 1px; }
 
 /* 玩家座位 */
-#player-seats { position: absolute; inset: 0; }
+#player-seats { position: absolute; inset: 0; overflow: visible; }
 .player-seat {
   position: absolute;
   transform: translate(-50%, -50%);
-  width: 66px;
+  width: 68px;
   text-align: center;
   z-index: 10;
 }
 .player-seat.folded { opacity: 0.38; }
 .seat-inner {
-  background: rgba(15,15,15,0.88);
-  border: 1.5px solid #333;
+  background: rgba(12,12,12,0.92);
+  border: 1.5px solid #3a3a3a;
   border-radius: 8px;
   padding: 4px 5px 3px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
   transition: border-color .2s, box-shadow .2s;
 }
 .player-seat.acting .seat-inner {
   border-color: var(--gold);
-  box-shadow: 0 0 10px rgba(255,215,0,0.45);
+  box-shadow: 0 0 10px rgba(255,215,0,0.5);
 }
 .player-seat.me .seat-inner {
   border-color: var(--gold-dim);
-  background: rgba(30,18,0,0.92);
+  background: rgba(25,14,0,0.95);
 }
 .seat-avatar {
-  width: 22px; height: 22px;
+  width: 20px; height: 20px;
   border-radius: 50%;
   background: var(--red-dark);
   color: #fff;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -320,8 +321,8 @@ input:focus { border-color: var(--red); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 58px;
-  line-height: 1;
+  max-width: 60px;
+  line-height: 1.1;
 }
 .player-seat.me .seat-name { color: var(--gold); }
 .player-seat.folded .seat-name { text-decoration: line-through; color: var(--text-dim); }
@@ -334,9 +335,15 @@ input:focus { border-color: var(--red); }
 .seat-bet-chip {
   font-size: 9px;
   color: var(--gold-dim);
-  margin-top: 1px;
+  line-height: 1;
 }
-.seat-badges { display: flex; justify-content: center; gap: 2px; margin-top: 2px; flex-wrap: wrap; }
+.seat-badges {
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
 
 /* ── 籌碼圖示 ── */
 .chip-stacks {
@@ -344,34 +351,24 @@ input:focus { border-color: var(--red); }
   gap: 3px;
   align-items: flex-end;
   justify-content: center;
-  min-height: 22px;
+  min-height: 18px;
 }
 .chip-col {
   display: flex;
   flex-direction: column-reverse;
   gap: 0;
 }
-.chip-token {
-  width: 14px;
-  height: 7px;
-  border-radius: 50%;
-  position: relative;
-  margin-top: -3px;
-  box-sizing: border-box;
-}
-/* 第一顆（底部）顯示正圓 */
+.chip-token { box-sizing: border-box; }
 .chip-col .chip-token:first-child {
-  height: 14px;
+  width: 13px; height: 13px;
   border-radius: 50%;
   margin-top: 0;
 }
-/* 疊加效果 */
 .chip-col .chip-token:not(:first-child) {
-  height: 5px;
+  width: 13px; height: 4px;
   border-radius: 40%;
   margin-top: -2px;
 }
-/* 顏色 */
 .chip-white  { background: #d8d8d8; border: 1.5px solid #999; }
 .chip-red    { background: #cc2200; border: 1.5px solid #ff6644; }
 .chip-green  { background: #1a6b1a; border: 1.5px solid #44bb44; }
@@ -380,14 +377,6 @@ input:focus { border-color: var(--red); }
 .chip-purple { background: #6600aa; border: 1.5px solid #aa44dd; }
 .chip-yellow { background: #cc9900; border: 1.5px solid #ffdd44; }
 .no-chips    { font-size: 9px; color: var(--red); font-weight: 700; }
-
-/* 下注籌碼（座位旁） */
-.bet-tokens {
-  position: absolute;
-  display: flex;
-  gap: 2px;
-  align-items: flex-end;
-}
 
 /* badges */
 .badge {
@@ -412,6 +401,9 @@ input:focus { border-color: var(--red); }
   display: flex;
   flex-direction: column;
   gap: 10px;
+  position: relative;
+  z-index: 5;
+  background: var(--bg);
 }
 #actor-label {
   font-size: 14px;

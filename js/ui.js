@@ -106,8 +106,8 @@ export function renderPot(hand) {
 function seatPos(i, n) {
   const angle = (Math.PI / 2) + (2 * Math.PI * i / n);
   return {
-    x: 50 + 46 * Math.cos(angle),
-    y: 50 - 40 * Math.sin(angle),
+    x: 50 + 45 * Math.cos(angle),
+    y: 50 - 34 * Math.sin(angle),   // 垂直半徑縮小防止超出
   };
 }
 
