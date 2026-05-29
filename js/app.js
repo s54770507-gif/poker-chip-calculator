@@ -52,6 +52,12 @@ function bindEvents() {
   // 等待室
   document.getElementById('btn-start-game').addEventListener('click', onStartGame);
   document.getElementById('btn-leave-room').addEventListener('click', onLeaveRoom);
+  document.getElementById('room-code-badge').addEventListener('click', () => {
+    const code = myRoomCode || '';
+    if (!code) return;
+    navigator.clipboard?.writeText(code).then(() => showToast(`代碼 ${code} 已複製`, 'info'))
+      .catch(() => showToast(`房間代碼：${code}`, 'info'));
+  });
   document.getElementById('btn-switch-player').addEventListener('click', () => {
     if (!myRoomCode || !currentRoom) return;
     const players = Object.values(currentRoom.players || {});
@@ -226,6 +232,8 @@ function renderRoom(room) {
   const players = Object.values(room.players || {});
   const myNameEl = document.getElementById('my-player-name');
   if (myNameEl) myNameEl.textContent = players[myPlayerIndex]?.name || '─';
+  const codeBadge = document.getElementById('room-code-badge');
+  if (codeBadge) codeBadge.textContent = room.code || myRoomCode || '';
 
   const hand = room.hand;
   switch (room.status) {

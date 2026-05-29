@@ -213,6 +213,20 @@ input:focus { border-color: var(--red); }
 }
 #my-player-name { font-size: 13px; color: var(--gold-dim); }
 #my-player-name::before { content: '你是：'; color: var(--text-dim); }
+.bar-right { display: flex; align-items: center; gap: 8px; }
+#room-code-badge {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 3px 8px;
+  cursor: pointer;
+  user-select: all;
+}
+#room-code-badge::before { content: '# '; color: #555; font-weight: 400; }
 #btn-switch-player {
   font-size: 12px;
   padding: 4px 10px;
