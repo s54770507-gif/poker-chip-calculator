@@ -349,7 +349,7 @@ export function showLoserText(loserIndices) {
     if (!inner) return;
     const overlay = document.createElement('div');
     overlay.className = 'loser-overlay';
-    overlay.textContent = '傻逼';
+    overlay.textContent = '分手💔';
     inner.appendChild(overlay);
     overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
   });
