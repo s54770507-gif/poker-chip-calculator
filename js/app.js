@@ -213,9 +213,7 @@ async function onCreateRoom() {
     config: { playerCount, startingChips, smallBlind, bigBlind },
     players: {
       0: { name: hostName, chips: startingChips, isActive: true }
-    },
-    hand: null,
-    history: {}
+    }
   };
 
   try {
