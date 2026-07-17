@@ -284,6 +284,7 @@ input:focus { border-color: var(--red); }
 }
 .player-seat.folded { opacity: 0.38; }
 .seat-inner {
+  position: relative;
   background: rgba(12,12,12,0.92);
   border: 1.5px solid #3a3a3a;
   border-radius: 8px;
@@ -293,6 +294,7 @@ input:focus { border-color: var(--red); }
   align-items: center;
   gap: 1px;
   transition: border-color .2s, box-shadow .2s;
+  overflow: hidden;
 }
 .player-seat.acting .seat-inner {
   border-color: var(--gold);
@@ -591,3 +593,43 @@ input:focus { border-color: var(--red); }
 }
 #history-table tr:last-child td { border-bottom: none; }
 .history-footer { padding: 12px 16px 20px; flex-shrink: 0; }
+
+/* ── 煙火動畫 ── */
+.firework-particle {
+  position: fixed;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  animation: fireworkFly var(--dur, 0.9s) ease-out forwards;
+}
+@keyframes fireworkFly {
+  0%   { transform: translate(0,0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx,0px), var(--dy,0px)) scale(0); opacity: 0; }
+}
+
+/* ── 輸家提示 ── */
+.loser-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.78);
+  z-index: 20;
+  pointer-events: none;
+  font-size: 15px;
+  font-weight: 900;
+  color: #ff3333;
+  letter-spacing: 2px;
+  text-shadow: 0 0 8px rgba(255,0,0,0.8);
+  animation: loserTextAnim 2s ease-in-out forwards;
+}
+@keyframes loserTextAnim {
+  0%   { opacity: 0; transform: scale(0.4) rotate(-12deg); }
+  15%  { opacity: 1; transform: scale(1.25) rotate(4deg); }
+  30%  { transform: scale(1.0) rotate(0deg); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}

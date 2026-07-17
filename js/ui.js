@@ -55,6 +55,7 @@ export function renderPlayerList(room, hand, myIndex) {
       const { x, y } = seatPos(i, n);
       const el = document.createElement('div');
       el.className = 'player-seat empty';
+      el.dataset.seatIndex = i;
       el.style.left = x + '%';
       el.style.top = y + '%';
       el.innerHTML = `
@@ -78,6 +79,7 @@ export function renderPlayerList(room, hand, myIndex) {
     const { x, y } = seatPos(i, n);
     const el = document.createElement('div');
     el.className = ['player-seat', isMe ? 'me' : '', isAction ? 'acting' : '', status === 'folded' ? 'folded' : ''].filter(Boolean).join(' ');
+    el.dataset.seatIndex = i;
     el.style.left = x + '%';
     el.style.top = y + '%';
 
@@ -310,4 +312,45 @@ function calcSidePots(seats, players) {
     amount: contributions.reduce((s, c) => s + c.total, 0),
     eligible: contributions.filter(s => s.status !== 'folded').map(s => s.idx)
   }];
+}
+
+// ── 煙火慶祝動畫 ──
+export function showFireworks() {
+  const colors = ['#ff4444','#ff8800','#ffdd00','#44ff88','#44aaff','#ff44ff','#ffffff','#ff0066'];
+  const bursts = 7;
+  for (let b = 0; b < bursts; b++) {
+    setTimeout(() => {
+      const cx = 15 + Math.random() * 70;
+      const cy = 10 + Math.random() * 45;
+      for (let i = 0; i < 20; i++) {
+        const p = document.createElement('div');
+        p.className = 'firework-particle';
+        const angle = (i / 20) * 2 * Math.PI + Math.random() * 0.25;
+        const speed = 55 + Math.random() * 110;
+        p.style.cssText =
+          `left:${cx}vw;top:${cy}vh;` +
+          `background:${colors[Math.floor(Math.random() * colors.length)]};` +
+          `--dx:${(Math.cos(angle) * speed).toFixed(1)}px;` +
+          `--dy:${(Math.sin(angle) * speed).toFixed(1)}px;` +
+          `--dur:${(0.7 + Math.random() * 0.6).toFixed(2)}s`;
+        document.body.appendChild(p);
+        p.addEventListener('animationend', () => p.remove(), { once: true });
+      }
+    }, b * 220 + Math.random() * 80);
+  }
+}
+
+// ── 輸家頭像顯示「傻逼」──
+export function showLoserText(loserIndices) {
+  loserIndices.forEach(idx => {
+    const seat = document.querySelector(`.player-seat[data-seat-index="${idx}"]`);
+    if (!seat) return;
+    const inner = seat.querySelector('.seat-inner');
+    if (!inner) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'loser-overlay';
+    overlay.textContent = '傻逼';
+    inner.appendChild(overlay);
+    overlay.addEventListener('animationend', () => overlay.remove(), { once: true });
+  });
 }

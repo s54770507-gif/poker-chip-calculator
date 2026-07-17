@@ -1,12 +1,13 @@
 import {
   initFirebase, roomRef, playersRef, playerRef, handRef, historyRef,
   dbSet, dbGet, dbUpdate, dbListen, dbTransaction, dbPush, serverTimestamp
-} from './firebase.js?v=2';
+} from './firebase.js?v=3';
 
 import {
   showPhase, showToast, renderWaiting,
-  renderPlayerList, renderPot, renderActionPanel, renderShowdown, renderHistory
-} from './ui.js?v=2';
+  renderPlayerList, renderPot, renderActionPanel, renderShowdown, renderHistory,
+  showFireworks, showLoserText
+} from './ui.js?v=3';
 
 // ── 本地狀態 ──────────────────────────────────────────────
 let myRoomCode = null;
@@ -589,6 +590,14 @@ async function awardPot(potIndex, winnerIndex) {
   };
   await dbUpdate(roomRef(myRoomCode), updates);
   showToast(`${winner.name} 贏得 ${pot.amount.toLocaleString()} 籌碼`);
+
+  // 全下贏家：放煙火；其他可贏玩家顯示「傻逼」
+  const winnerWasAllin = hand.seats[winnerIndex]?.status === 'allin';
+  if (winnerWasAllin) {
+    showFireworks();
+    const losers = pot.eligible.filter(idx => idx !== winnerIndex);
+    if (losers.length > 0) showLoserText(losers);
+  }
 
   // 所有底池都分配完畢則結束本局
   const awardedCount = Object.keys(hand.awards || {}).length + 1;
