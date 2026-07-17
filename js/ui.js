@@ -177,7 +177,7 @@ export function renderCards(hand, myIndex) {
 // ── 工具：座位位置（直式橢圓，myIndex 永遠在最下方）──
 function seatPos(i, n, myIndex = 0) {
   // -π/2 (270°) = 桌面最下方；以 myIndex 為基準旋轉
-  const angle = (-Math.PI / 2) + (2 * Math.PI * (i - myIndex) / n);
+  const angle = (-Math.PI / 2) - (2 * Math.PI * (i - myIndex) / n);
   return {
     x: 50 + 39 * Math.cos(angle),
     y: 50 - 42 * Math.sin(angle),
