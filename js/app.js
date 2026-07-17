@@ -5,9 +5,10 @@ import {
 
 import {
   showPhase, showToast, renderWaiting,
-  renderPlayerList, renderPot, renderActionPanel, renderShowdown, renderHistory,
-  showFireworks, showLoserText, renderCards
-} from './ui.js?v=7';
+  renderPlayerList, renderPot, renderActionPanel, renderHistory,
+  showFireworks, showLoserText, renderCards,
+  showWinnerOverlay, animateDealCards
+} from './ui.js?v=8';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
@@ -20,6 +21,8 @@ let unsubscribe = null;
 let pendingJoinAvatar = null;
 let pendingHostAvatar = null;
 let showdownAnimated = false;
+let autoStartTimer = null;
+let lastHandNumber = null;
 
 // ── 初始化 ────────────────────────────────────────────────
 export function init() {
@@ -141,9 +144,12 @@ function bindEvents() {
   document.querySelectorAll('.btn-history').forEach(btn =>
     btn.addEventListener('click', () => showPhase('history'))
   );
-  document.getElementById('btn-back-game').addEventListener('click', () => {
-    if (currentRoom?.hand?.round === 'showdown') showPhase('showdown');
-    else showPhase('hand');
+  document.getElementById('btn-back-game').addEventListener('click', () => showPhase('hand'));
+
+  // 結算 overlay 補充籌碼
+  document.getElementById('winner-overlay')?.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-rebuy');
+    if (btn) handleRebuy(+btn.dataset.playerIndex);
   });
 }
 
@@ -295,15 +301,24 @@ function renderRoom(room) {
         renderPlayerList(room, hand, myPlayerIndex);
         renderPot(hand);
         renderCards(hand, myPlayerIndex);
-        renderShowdown(room, hand);
         renderHistory(room);
-        showPhase('showdown');
-        // 首次進入攤牌時觸發動畫
+        showPhase('hand');
         if (!showdownAnimated) {
           showdownAnimated = true;
           triggerShowdownAnimations(room, hand);
+          showWinnerOverlay(room, hand);
+          // 4 秒後自動發牌開始下一局
+          clearTimeout(autoStartTimer);
+          autoStartTimer = setTimeout(async () => {
+            document.getElementById('winner-overlay')?.classList.add('hidden');
+            await autoStartNextHand(hand.number);
+          }, 4000);
         }
       } else {
+        // 隱藏結算 overlay，清除自動開局計時
+        document.getElementById('winner-overlay')?.classList.add('hidden');
+        clearTimeout(autoStartTimer);
+        autoStartTimer = null;
         showGameControls();
         renderPlayerList(room, hand, myPlayerIndex);
         renderPot(hand);
@@ -311,6 +326,12 @@ function renderRoom(room) {
         renderActionPanel(room, hand, myPlayerIndex);
         document.getElementById('btn-show-history-hand').style.display = 'block';
         showPhase('hand');
+        // 偵測到新局時觸發發牌動畫
+        if (lastHandNumber !== hand.number) {
+          lastHandNumber = hand.number;
+          const totalSlots = room.config?.playerCount || Object.keys(room.players || {}).length;
+          setTimeout(() => animateDealCards(hand, myPlayerIndex, totalSlots), 80);
+        }
       }
       break;
   }
@@ -364,6 +385,8 @@ async function onStartGame() {
 
 async function startHand() {
   showdownAnimated = false;
+  clearTimeout(autoStartTimer);
+  autoStartTimer = null;
   const room = await dbGet(roomRef(myRoomCode));
   const players = Object.values(room.players);
   const config = room.config;
@@ -738,6 +761,24 @@ function triggerShowdownAnimations(room, hand) {
   });
 }
 
+// ── 自動開始下一局（transaction 防止多客戶端同時觸發）──
+async function autoStartNextHand(expectedHandNum) {
+  try {
+    let canStart = false;
+    await dbTransaction(handRef(myRoomCode), (hand) => {
+      if (!hand) return;          // null → abort transaction
+      if (hand.number !== expectedHandNum) return; // 已有新局
+      if (hand.nextHandClaimed) return;             // 已被其他客戶端搶先
+      hand.nextHandClaimed = true;
+      canStart = true;
+      return hand;
+    });
+    if (canStart) await startHand();
+  } catch (e) {
+    console.warn('autoStartNextHand transaction error:', e);
+  }
+}
+
 // ── 補充籌碼 ──────────────────────────────────────────────
 async function handleRebuy(playerIndex) {
   const room = await dbGet(roomRef(myRoomCode));
@@ -753,10 +794,13 @@ async function handleRebuy(playerIndex) {
 // ── 離開房間 ──────────────────────────────────────────────
 function onLeaveRoom() {
   if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  clearTimeout(autoStartTimer);
+  autoStartTimer = null;
   clearLocal();
   myRoomCode = null;
   myPlayerIndex = null;
   currentRoom = null;
+  lastHandNumber = null;
   showPhase('home');
 }
 

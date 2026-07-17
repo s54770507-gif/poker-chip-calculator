@@ -130,6 +130,7 @@
       <div id="table-felt">
         <div id="table-center">
           <div id="community-cards" class="community-cards"></div>
+          <div id="pot-chips" class="pot-chips-row"></div>
           <div class="table-pot-label">底池</div>
           <div id="table-pot-val">0</div>
           <div id="table-round-label">翻牌前</div>
@@ -235,6 +236,15 @@
 
 </div><!-- #app -->
 
+<!-- 每局結算 Overlay -->
+<div id="winner-overlay" class="winner-overlay hidden">
+  <div class="winner-overlay-inner">
+    <div id="winner-overlay-header"></div>
+    <div id="winner-overlay-hands"></div>
+    <div id="winner-overlay-chips"></div>
+  </div>
+</div>
+
 <!-- 加入房間 / 切換玩家 overlay -->
 <div id="player-select-overlay" class="overlay hidden">
   <div class="overlay-box">
@@ -260,6 +270,6 @@
 
 <div id="toast"></div>
 
-<script type="module" src="js/app.js?v=7"></script>
+<script type="module" src="js/app.js?v=8"></script>
 </body>
 </html>

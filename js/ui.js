@@ -1,6 +1,7 @@
 // ── 純渲染函式，不含任何遊戲邏輯 ──
 import { cardHTML, cardBackHTML, RANKS, SUITS } from './cards.js?v=7';
 
+
 export function showPhase(phase) {
   document.getElementById('app').className = `phase-${phase}`;
 }
@@ -121,7 +122,6 @@ export function renderPlayerList(room, hand, myIndex) {
       : `<div class="seat-inner">
            <div class="seat-avatar">${p.name[0].toUpperCase()}</div>
            <div class="seat-name">${p.name.slice(0, 7)}</div>
-           <div class="chip-stacks">${buildChipStacks(p.chips)}</div>
            <div class="seat-amount">${p.chips.toLocaleString()}</div>
            ${betHtml}
            ${seatCardsHtml}
@@ -133,11 +133,15 @@ export function renderPlayerList(room, hand, myIndex) {
 
 // 底池 + 輪次（更新牌桌中央 + header）
 export function renderPot(hand) {
-  const pot = (hand?.pot || 0).toLocaleString();
+  const amount = hand?.pot || 0;
+  const pot = amount.toLocaleString();
   const el = document.getElementById('table-pot-val');
   if (el) el.textContent = pot;
   const el2 = document.getElementById('pot-amount');
   if (el2) el2.textContent = pot;
+
+  const potChipsEl = document.getElementById('pot-chips');
+  if (potChipsEl) potChipsEl.innerHTML = buildPotChips(amount);
 
   const roundNames = { preflop: '翻牌前', flop: '翻牌', turn: '轉牌', river: '河牌' };
   const rName = roundNames[hand?.round] || '';
@@ -209,6 +213,153 @@ function buildChipStacks(chips) {
   return stacks.map(s =>
     `<div class="chip-col">${Array(s.cnt).fill(`<div class="chip-token ${s.cls}"></div>`).join('')}</div>`
   ).join('');
+}
+
+// ── 工具：底池籌碼視覺 ──
+function buildPotChips(amount) {
+  if (amount <= 0) return '';
+  let rem = amount;
+  const tokens = [];
+  for (const d of DENOMS) {
+    const cnt = Math.min(Math.floor(rem / d.val), 4);
+    if (cnt > 0) {
+      for (let k = 0; k < cnt; k++) {
+        tokens.push(`<div class="chip-token ${d.cls} pot-chip-token"></div>`);
+      }
+      rem -= cnt * d.val;
+    }
+    if (tokens.length >= 12) break;
+  }
+  return tokens.join('');
+}
+
+// ── 贏家 Overlay ──
+export function showWinnerOverlay(room, hand) {
+  const overlay = document.getElementById('winner-overlay');
+  if (!overlay) return;
+
+  const players  = Object.values(room.players || {});
+  const seats    = hand.seats || {};
+  const awards   = hand.awards || {};
+  const evals    = hand.evaluations || {};
+  const holeCards = hand.holeCards || {};
+  const communityCards = hand.communityCards || [];
+
+  // 收集所有贏家
+  const allWinners = new Set();
+  Object.values(awards).forEach(w => {
+    if (Array.isArray(w)) w.forEach(i => allWinners.add(i));
+    else if (w !== undefined) allWinners.add(w);
+  });
+
+  const winnerNames = [...allWinners].map(i => players[i]?.name || `玩家${i+1}`).join('、');
+  const mainWinnerIdx = Array.isArray(awards[0]) ? awards[0][0] : awards[0];
+  const mainHandName = evals[mainWinnerIdx]?.name || '';
+
+  const header = document.getElementById('winner-overlay-header');
+  if (header) {
+    header.innerHTML = `🏆 ${winnerNames} 贏了！` +
+      (mainHandName ? `<br><small style="font-size:13px;color:#ccc">${mainHandName}</small>` : '');
+  }
+
+  // 玩家手牌揭示
+  const handsEl = document.getElementById('winner-overlay-hands');
+  if (handsEl) {
+    const notFolded = Object.entries(seats).filter(([, s]) => s.status !== 'folded');
+    const showCards = notFolded.length >= 2 && communityCards.length >= 5;
+    handsEl.innerHTML = notFolded.map(([i]) => {
+      const idx  = +i;
+      const name = players[idx]?.name || `玩家${idx+1}`;
+      const hole = holeCards[idx];
+      const ev   = evals[idx];
+      const isW  = allWinners.has(idx);
+      const cardsHtml = (showCards && hole)
+        ? `<div style="display:flex;gap:3px">${hole.map(c => cardHTML(c,'sm')).join('')}</div>` : '';
+      return `<div class="wo-hand-row${isW ? ' winner' : ''}">
+        <span class="wo-name">${name}</span>
+        ${cardsHtml}
+        ${ev ? `<span class="hand-type-badge">${ev.name}</span>` : ''}
+        ${isW ? '<span style="font-size:15px">👑</span>' : ''}
+      </div>`;
+    }).join('');
+  }
+
+  // 籌碼彙總（含補充籌碼按鈕）
+  const chipsEl = document.getElementById('winner-overlay-chips');
+  if (chipsEl) {
+    chipsEl.innerHTML = `<div class="wo-chips-section">
+      <div class="wo-chips-title">目前籌碼</div>
+      ${players.map((p, i) => `
+        <div class="wo-chip-row">
+          <span>${p.name}</span>
+          <span class="wo-chip-val">
+            ${p.chips > 0 ? p.chips.toLocaleString() : '<span style="color:#888">爆牌</span>'}
+            ${p.chips <= 0
+              ? `<button class="btn-rebuy" data-player-index="${i}"
+                   style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--red-dark);border:1px solid var(--red);border-radius:5px;color:#fff;cursor:pointer">補充</button>`
+              : ''}
+          </span>
+        </div>`).join('')}
+    </div>`;
+  }
+
+  overlay.classList.remove('hidden');
+}
+
+// ── 發牌動畫（從桌面中央飛往各座位）──
+export function animateDealCards(hand, myIndex, totalSlots) {
+  const holeCards = hand?.holeCards || {};
+  const activeIndices = Object.keys(holeCards).map(Number);
+  if (!activeIndices.length) return;
+
+  const wrapper = document.getElementById('table-wrapper');
+  if (!wrapper) return;
+  const wRect = wrapper.getBoundingClientRect();
+  const cx = wRect.left + wRect.width  / 2;
+  const cy = wRect.top  + wRect.height / 2;
+
+  // 隱藏座位手牌，動畫結束後再顯示
+  document.querySelectorAll('.seat-cards').forEach(el => { el.style.opacity = '0'; });
+
+  // 發牌順序：從莊家右邊（逆時針）開始，每人先發第一張再發第二張
+  const dealerIdx = hand.dealerIndex ?? 0;
+  const n = totalSlots;
+  const sorted = activeIndices.slice().sort((a, b) => {
+    const da = (a - dealerIdx - 1 + n) % n;
+    const db = (b - dealerIdx - 1 + n) % n;
+    return da - db;
+  });
+  const dealOrder = [...sorted, ...sorted]; // 兩輪
+
+  dealOrder.forEach((seatIdx, i) => {
+    setTimeout(() => {
+      const seatEl = document.querySelector(`.player-seat[data-seat-index="${seatIdx}"]`);
+      if (!seatEl) return;
+      const sRect = seatEl.getBoundingClientRect();
+      const sx = sRect.left + sRect.width  / 2;
+      const sy = sRect.top  + sRect.height / 2;
+
+      const card = document.createElement('div');
+      card.className = 'deal-card-anim card card-sm card-back';
+      card.style.cssText = [
+        'position:fixed',
+        `left:${cx}px`, `top:${cy}px`,
+        'transform:translate(-50%,-50%)',
+        'z-index:9000',
+        `--tx:${(sx - cx).toFixed(1)}px`,
+        `--ty:${(sy - cy).toFixed(1)}px`,
+        'animation:dealFly 0.38s ease-out forwards'
+      ].join(';');
+      document.body.appendChild(card);
+      card.addEventListener('animationend', () => card.remove(), { once: true });
+    }, i * 140);
+  });
+
+  // 動畫全部結束後顯示真實手牌
+  const totalMs = dealOrder.length * 140 + 420;
+  setTimeout(() => {
+    document.querySelectorAll('.seat-cards').forEach(el => { el.style.opacity = ''; });
+  }, totalMs);
 }
 
 // 行動面板

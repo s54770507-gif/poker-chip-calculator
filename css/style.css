@@ -876,3 +876,86 @@ input:focus { border-color: var(--red); }
   padding: 2px 0;
 }
 .hand-info-row span { color: var(--text); }
+
+/* ── 底池籌碼視覺（桌面中央）── */
+.pot-chips-row {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  min-height: 14px;
+  max-width: 88%;
+}
+.pot-chip-token {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── 贏家 Overlay（從底部滑入）── */
+.winner-overlay {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 500;
+  animation: winOverlayIn 0.4s ease-out;
+}
+.winner-overlay.hidden { display: none; }
+.winner-overlay-inner {
+  background: linear-gradient(180deg, #1f0a00 0%, #0d0d0d 100%);
+  border: 1px solid var(--gold-dim);
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
+  padding: 14px 16px 20px;
+  max-height: 52vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+@keyframes winOverlayIn {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+#winner-overlay-header {
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--gold);
+  padding-bottom: 10px;
+  border-bottom: 1px solid #2e2e2e;
+}
+.wo-hand-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--panel);
+  flex-wrap: wrap;
+}
+.wo-hand-row.winner {
+  background: #1a1000;
+  border: 1px solid var(--gold-dim);
+}
+.wo-name { font-size: 13px; font-weight: 600; min-width: 48px; flex-shrink: 0; }
+.wo-chips-section { border-top: 1px solid #2e2e2e; padding-top: 8px; }
+.wo-chips-title { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+.wo-chip-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #222;
+}
+.wo-chip-row:last-child { border-bottom: none; }
+.wo-chip-val { color: var(--gold); font-weight: 700; }
+
+/* ── 發牌動畫 ── */
+@keyframes dealFly {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  75%  { opacity: 0.95; }
+  100% { transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, 0px))) scale(0.7); opacity: 0; }
+}
+.deal-card-anim { pointer-events: none; }
