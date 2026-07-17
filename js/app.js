@@ -8,7 +8,7 @@ import {
   renderPlayerList, renderPot, renderActionPanel, renderHistory,
   showFireworks, showLoserText, renderCards,
   showWinnerOverlay, animateDealCards
-} from './ui.js?v=8';
+} from './ui.js?v=9';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
@@ -23,6 +23,7 @@ let pendingHostAvatar = null;
 let showdownAnimated = false;
 let autoStartTimer = null;
 let lastHandNumber = null;
+let autoAdvancing = false;
 
 // ── 初始化 ────────────────────────────────────────────────
 export function init() {
@@ -332,6 +333,19 @@ function renderRoom(room) {
           const totalSlots = room.config?.playerCount || Object.keys(room.players || {}).length;
           setTimeout(() => animateDealCards(hand, myPlayerIndex, totalSlots), 80);
         }
+        // 偵測行動者已離開或棄牌導致遊戲卡住
+        if (!autoAdvancing && !hand.autoAwarded) {
+          const actorSeat   = hand.seats?.[hand.actionIndex];
+          const actorPlayer = players[hand.actionIndex];
+          if (actorSeat?.status !== 'active' || actorPlayer?.isActive === false) {
+            autoAdvancing = true;
+            setTimeout(async () => {
+              try { await advanceTurn(); }
+              catch (e) { console.warn('auto-advance error:', e); }
+              finally { autoAdvancing = false; }
+            }, 300 + (myPlayerIndex || 0) * 80);
+          }
+        }
       }
       break;
   }
@@ -385,6 +399,7 @@ async function onStartGame() {
 
 async function startHand() {
   showdownAnimated = false;
+  autoAdvancing = false;
   clearTimeout(autoStartTimer);
   autoStartTimer = null;
   const room = await dbGet(roomRef(myRoomCode));
@@ -393,8 +408,8 @@ async function startHand() {
   const prevHand = room.hand;
   const handNumber = (prevHand?.number || 0) + 1;
 
-  const activePlayers = players.filter(p => p.chips > 0);
-  if (activePlayers.length < 2) { showToast('籌碼不足，請先補充籌碼', 'info'); return; }
+  const activePlayers = players.filter(p => p.chips > 0 && p.isActive !== false);
+  if (activePlayers.length < 2) { showToast('籌碼不足或玩家不足，請先補充籌碼', 'info'); return; }
 
   // 莊家輪換
   let dealerIdx = prevHand?.dealerIndex ?? 0;
@@ -408,10 +423,11 @@ async function startHand() {
   const sb = config.smallBlind;
   const bb = config.bigBlind;
 
-  // 建立座位
+  // 建立座位（已離開或無籌碼的玩家直接標為棄牌）
   const seats = {};
   players.forEach((p, i) => {
-    seats[i] = { bet: 0, totalBetInHand: 0, status: p.chips > 0 ? 'active' : 'folded', hasActed: false };
+    const canPlay = p.chips > 0 && p.isActive !== false;
+    seats[i] = { bet: 0, totalBetInHand: 0, status: canPlay ? 'active' : 'folded', hasActed: false };
   });
 
   // 扣盲注
@@ -446,7 +462,7 @@ async function startHand() {
   // 發牌
   const deck = shuffleDeck();
   let deckIdx = 0;
-  const activeIndices = players.map((_, i) => i).filter(i => players[i].chips > 0);
+  const activeIndices = players.map((_, i) => i).filter(i => players[i].chips > 0 && players[i].isActive !== false);
   const holeCards = {};
   activeIndices.forEach(i => {
     holeCards[i] = [deck[deckIdx++], deck[deckIdx++]];
@@ -793,15 +809,40 @@ async function handleRebuy(playerIndex) {
 
 // ── 離開房間 ──────────────────────────────────────────────
 function onLeaveRoom() {
+  // 捕捉離開前的狀態
+  const code = myRoomCode;
+  const idx  = myPlayerIndex;
+  const hand = currentRoom?.hand;
+
+  // 立即停止監聽並跳回首頁
   if (unsubscribe) { unsubscribe(); unsubscribe = null; }
   clearTimeout(autoStartTimer);
   autoStartTimer = null;
+  autoAdvancing = false;
   clearLocal();
-  myRoomCode = null;
+  myRoomCode    = null;
   myPlayerIndex = null;
-  currentRoom = null;
+  currentRoom   = null;
   lastHandNumber = null;
   showPhase('home');
+
+  // 在背景更新 Firebase（不阻塞 UI）
+  if (!code || idx === null) return;
+  (async () => {
+    try {
+      const updates = { [`players/${idx}/isActive`]: false };
+
+      // 若仍在對局中且該玩家尚未棄牌，標記為棄牌
+      if (hand && hand.round !== 'showdown' && hand.seats?.[idx]?.status === 'active') {
+        updates[`hand/seats/${idx}/status`]   = 'folded';
+        updates[`hand/seats/${idx}/hasActed`] = true;
+      }
+
+      await dbUpdate(roomRef(code), updates);
+    } catch (e) {
+      console.warn('離開房間寫入錯誤:', e);
+    }
+  })();
 }
 
 function toggleRaisePanel() {
@@ -818,7 +859,7 @@ function nextActiveIdx(from, players) {
   const n = players.length;
   let i = (from + 1) % n;
   for (let loop = 0; loop < n; loop++) {
-    if (players[i]?.chips > 0) return i;
+    if (players[i]?.chips > 0 && players[i]?.isActive !== false) return i;
     i = (i + 1) % n;
   }
   return from;

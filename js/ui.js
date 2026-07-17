@@ -70,6 +70,24 @@ export function renderPlayerList(room, hand, myIndex) {
       continue;
     }
 
+    // 已離開的玩家：顯示灰化座位
+    if (p.isActive === false) {
+      const { x, y } = seatPos(i, n, myIndex);
+      const el = document.createElement('div');
+      el.className = 'player-seat empty left';
+      el.dataset.seatIndex = i;
+      el.style.left = x + '%';
+      el.style.top = y + '%';
+      el.innerHTML = `
+        <div class="seat-inner" style="opacity:0.3">
+          <div class="seat-avatar" style="font-size:11px;background:#333">✕</div>
+          <div class="seat-name">${p.name.slice(0, 7)}</div>
+          <div class="seat-amount" style="color:var(--text-dim)">已離開</div>
+        </div>`;
+      seats.appendChild(el);
+      continue;
+    }
+
     const hs = handSeats[i] || {};
     const isMe = i === myIndex;
     const isDealer = i === dealerIdx;
