@@ -94,18 +94,24 @@ export function renderPlayerList(room, hand, myIndex) {
       ? `<div class="seat-bet-chip">+${hs.bet.toLocaleString()}</div>`
       : '';
 
-    const avatarContent = p.avatar
-      ? `<img src="${p.avatar}" alt="${p.name[0]}">`
-      : p.name[0].toUpperCase();
-    el.innerHTML = `
-      <div class="seat-inner">
-        <div class="seat-avatar">${avatarContent}</div>
-        <div class="seat-name">${p.name.slice(0, 7)}</div>
-        <div class="chip-stacks">${buildChipStacks(p.chips)}</div>
-        <div class="seat-amount">${p.chips.toLocaleString()}</div>
-        ${betHtml}
-      </div>
-      <div class="seat-badges">${badges}</div>`;
+    const hasAvatar = !!p.avatar;
+    el.innerHTML = hasAvatar
+      ? `<div class="seat-inner has-avatar" style="background-image:url('${p.avatar}')">
+           <div class="seat-info-bar">
+             <div class="seat-name">${p.name.slice(0, 7)}</div>
+             <div class="seat-amount">${p.chips.toLocaleString()}</div>
+             ${betHtml}
+           </div>
+         </div>
+         <div class="seat-badges">${badges}</div>`
+      : `<div class="seat-inner">
+           <div class="seat-avatar">${p.name[0].toUpperCase()}</div>
+           <div class="seat-name">${p.name.slice(0, 7)}</div>
+           <div class="chip-stacks">${buildChipStacks(p.chips)}</div>
+           <div class="seat-amount">${p.chips.toLocaleString()}</div>
+           ${betHtml}
+         </div>
+         <div class="seat-badges">${badges}</div>`;
     seats.appendChild(el);
   }
 }
@@ -255,7 +261,11 @@ export function renderShowdown(room, hand) {
   // 目前籌碼
   const chipList = document.getElementById('showdown-chips');
   chipList.innerHTML = players.map((p, i) =>
-    `<div class="chip-row"><span>${p.name}</span><span>${p.chips.toLocaleString()}</span></div>`
+    `<div class="chip-row">
+      <span>${p.name}</span>
+      <span>${p.chips > 0 ? p.chips.toLocaleString() : '<span style="color:#888">爆牌</span>'}</span>
+      ${p.chips <= 0 ? `<button class="btn-rebuy" data-player-index="${i}">補充籌碼</button>` : ''}
+    </div>`
   ).join('');
 }
 

@@ -305,11 +305,11 @@ input:focus { border-color: var(--red); }
   background: rgba(25,14,0,0.95);
 }
 .seat-avatar {
-  width: 20px; height: 20px;
+  width: 36px; height: 36px;
   border-radius: 50%;
   background: var(--red-dark);
   color: #fff;
-  font-size: 10px;
+  font-size: 15px;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -318,6 +318,25 @@ input:focus { border-color: var(--red); }
   overflow: hidden;
 }
 .seat-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* 頭像填滿座位卡 */
+.seat-inner.has-avatar {
+  background-size: cover;
+  background-position: center top;
+  justify-content: flex-end;
+  padding: 0;
+  min-height: 80px;
+  min-width: 64px;
+}
+.seat-info-bar {
+  width: 100%;
+  background: linear-gradient(transparent, rgba(0,0,0,0.88) 25%);
+  padding: 10px 4px 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
 .player-seat.me .seat-avatar { background: #7a5500; }
 .seat-name {
   font-size: 10px;
@@ -661,3 +680,17 @@ input:focus { border-color: var(--red); }
 .avatar-pick:active { border-color: var(--gold); }
 .avatar-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar-pick-hint { font-size: 11px; color: var(--text-dim); }
+
+/* ── 補充籌碼 ── */
+.btn-rebuy {
+  font-size: 11px;
+  padding: 3px 10px;
+  background: var(--red-dark);
+  border: 1px solid var(--red);
+  border-radius: 6px;
+  color: var(--text);
+  cursor: pointer;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.btn-rebuy:active { opacity: 0.75; }

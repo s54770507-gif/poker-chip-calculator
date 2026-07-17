@@ -1,13 +1,13 @@
 import {
   initFirebase, roomRef, playersRef, playerRef, handRef, historyRef,
   dbSet, dbGet, dbUpdate, dbListen, dbTransaction, dbPush, serverTimestamp
-} from './firebase.js?v=4';
+} from './firebase.js?v=5';
 
 import {
   showPhase, showToast, renderWaiting,
   renderPlayerList, renderPot, renderActionPanel, renderShowdown, renderHistory,
   showFireworks, showLoserText
-} from './ui.js?v=4';
+} from './ui.js?v=5';
 
 // ── 本地狀態 ──────────────────────────────────────────────
 let myRoomCode = null;
@@ -71,13 +71,15 @@ function bindEvents() {
       const btn = document.createElement('button');
       btn.className = 'player-select-btn';
       btn.textContent = p.name + (i === myPlayerIndex ? ' ✓' : '');
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         document.getElementById('player-select-overlay').classList.add('hidden');
         document.getElementById('join-mode').style.display = '';
         document.getElementById('switch-mode').style.display = 'none';
         myPlayerIndex = i;
         saveLocal(myRoomCode, i);
-        renderRoom(currentRoom);
+        // 重新讀取確保渲染資料最新
+        const fresh = await dbGet(roomRef(myRoomCode));
+        if (fresh) { fresh.code = myRoomCode; currentRoom = fresh; renderRoom(fresh); }
         showToast(`切換為 ${p.name}`);
       });
       list.appendChild(btn);
@@ -128,6 +130,11 @@ function bindEvents() {
     const btn = e.target.closest('.btn-winner');
     if (!btn) return;
     awardPot(+btn.dataset.potIndex, +btn.dataset.winnerIndex);
+  });
+  document.getElementById('showdown-chips').addEventListener('click', e => {
+    const btn = e.target.closest('.btn-rebuy');
+    if (!btn) return;
+    handleRebuy(+btn.dataset.playerIndex);
   });
   document.getElementById('btn-new-hand').addEventListener('click', startHand);
 
@@ -354,8 +361,8 @@ async function startHand() {
   const prevHand = room.hand;
   const handNumber = (prevHand?.number || 0) + 1;
 
-  const activePlayers = players.filter(p => p.isActive && p.chips > 0);
-  if (activePlayers.length < 2) { showToast('玩家籌碼不足，遊戲結束', 'info'); return; }
+  const activePlayers = players.filter(p => p.chips > 0);
+  if (activePlayers.length < 2) { showToast('籌碼不足，請先補充籌碼', 'info'); return; }
 
   // 莊家輪換
   let dealerIdx = prevHand?.dealerIndex ?? 0;
@@ -630,14 +637,22 @@ async function endHand(winnerIndex, pots) {
 
   await dbPush(historyRef(myRoomCode), historyEntry);
 
-  // 更新無籌碼玩家的 isActive
   const updates = {};
-  players.forEach((p, i) => {
-    if (p.chips <= 0) updates[`players/${i}/isActive`] = false;
-  });
   if (Object.keys(updates).length > 0) await dbUpdate(roomRef(myRoomCode), updates);
 
   showToast('本局結束，準備下一局...');
+}
+
+// ── 補充籌碼 ──────────────────────────────────────────────
+async function handleRebuy(playerIndex) {
+  const room = await dbGet(roomRef(myRoomCode));
+  const startingChips = room.config.startingChips;
+  const name = room.players[playerIndex]?.name || `玩家${playerIndex + 1}`;
+  await dbUpdate(roomRef(myRoomCode), {
+    [`players/${playerIndex}/chips`]: startingChips,
+    [`players/${playerIndex}/isActive`]: true
+  });
+  showToast(`${name} 補充 ${startingChips.toLocaleString()} 籌碼`, 'info');
 }
 
 // ── 離開房間 ──────────────────────────────────────────────
@@ -664,7 +679,7 @@ function nextActiveIdx(from, players) {
   const n = players.length;
   let i = (from + 1) % n;
   for (let loop = 0; loop < n; loop++) {
-    if (players[i]?.isActive && players[i]?.chips > 0) return i;
+    if (players[i]?.chips > 0) return i;
     i = (i + 1) % n;
   }
   return from;
