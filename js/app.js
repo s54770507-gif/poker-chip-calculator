@@ -1,12 +1,12 @@
 import {
   initFirebase, roomRef, playersRef, playerRef, handRef, historyRef,
   dbSet, dbGet, dbUpdate, dbListen, dbTransaction, dbPush, serverTimestamp
-} from './firebase.js';
+} from './firebase.js?v=2';
 
 import {
   showPhase, showToast, renderWaiting,
   renderPlayerList, renderPot, renderActionPanel, renderShowdown, renderHistory
-} from './ui.js';
+} from './ui.js?v=2';
 
 // ── 本地狀態 ──────────────────────────────────────────────
 let myRoomCode = null;
@@ -191,8 +191,9 @@ async function doJoinRoom() {
     showPhase('waiting');
     showToast(`歡迎 ${name}！`);
   } catch (e) {
-    showToast('加入失敗，請重試', 'error');
-    console.error(e);
+    const isPermission = e?.code?.includes('permission') || String(e?.message).includes('PERMISSION_DENIED');
+    showToast(isPermission ? 'Firebase 規則過期，請至 Console 更新讀寫規則' : '加入失敗：' + (e?.code || e?.message || '請重試'), 'error');
+    console.error('doJoinRoom error:', e);
   }
 }
 
@@ -225,8 +226,9 @@ async function onCreateRoom() {
     showPhase('waiting');
     showToast(`房間已建立：${code}`);
   } catch (e) {
-    showToast('建立失敗，請重試', 'error');
-    console.error(e);
+    const isPermission = e?.code?.includes('permission') || String(e?.message).includes('PERMISSION_DENIED');
+    showToast(isPermission ? 'Firebase 規則過期，請至 Console 更新讀寫規則' : '建立失敗：' + (e?.code || e?.message || '請重試'), 'error');
+    console.error('onCreateRoom error:', e);
   }
 }
 
