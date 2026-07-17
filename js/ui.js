@@ -1,5 +1,5 @@
 // ── 純渲染函式，不含任何遊戲邏輯 ──
-import { cardHTML, cardBackHTML } from './cards.js?v=6';
+import { cardHTML, cardBackHTML, RANKS, SUITS } from './cards.js?v=7';
 
 export function showPhase(phase) {
   document.getElementById('app').className = `phase-${phase}`;
@@ -279,38 +279,75 @@ export function renderActionPanel(room, hand, myIndex) {
   document.getElementById('raise-allin').innerHTML= `<span>全下</span><small>${allin.toLocaleString()}</small>`;
 }
 
-// 攤牌畫面
+// 攤牌畫面（自動結算結果）
 export function renderShowdown(room, hand) {
   const players = Object.values(room.players || {});
-  const seats = hand?.seats || [];
+  const seats   = hand?.seats || {};
+  const awards  = hand?.awards || {};
+  const evals   = hand?.evaluations || {};
+  const holeCards = hand?.holeCards || {};
+  const communityCards = hand?.communityCards || [];
 
-  const pots = calcSidePots(seats, players);
-  const container = document.getElementById('showdown-pots');
-  container.innerHTML = '';
+  // ── 公共牌 ──
+  const comContainer = document.getElementById('showdown-community');
+  if (comContainer) {
+    comContainer.innerHTML = communityCards.length
+      ? `<div class="showdown-community-cards">${communityCards.map(c => cardHTML(c,'sm')).join('')}</div>`
+      : '';
+  }
 
-  const awards = hand?.awards || {};
-  pots.forEach((pot, pi) => {
-    const section = document.createElement('div');
-    const isAwarded = awards[pi] !== undefined;
-    section.className = 'pot-section' + (isAwarded ? ' awarded' : '');
-    const potLabel = pi === 0 ? '主底池' : `邊池 ${pi}`;
-    const winnerLabel = isAwarded ? ` → ${players[awards[pi]]?.name || ''}` : '';
-    section.innerHTML = `<div class="pot-title">${potLabel}: ${pot.amount.toLocaleString()}${winnerLabel}</div>`;
-    const btnRow = document.createElement('div');
-    btnRow.className = 'winner-btns';
-    pot.eligible.forEach(idx => {
-      const btn = document.createElement('button');
-      btn.className = 'btn-winner';
-      btn.textContent = players[idx]?.name || `玩家${idx+1}`;
-      btn.dataset.potIndex = pi;
-      btn.dataset.winnerIndex = idx;
-      btnRow.appendChild(btn);
-    });
-    section.appendChild(btnRow);
-    container.appendChild(section);
+  // ── 底池結果 ──
+  const potsArr = calcSidePots(seats, players);
+  const potsEl  = document.getElementById('showdown-pots');
+  potsEl.innerHTML = '';
+
+  potsArr.forEach((pot, pi) => {
+    const winnerRaw = awards[pi];
+    const winners   = winnerRaw === undefined ? [] :
+                      Array.isArray(winnerRaw) ? winnerRaw : [winnerRaw];
+    const label     = pi === 0 ? '主底池' : `邊池 ${pi}`;
+
+    const winText = winners.map(idx => {
+      const name     = players[idx]?.name || `玩家${idx+1}`;
+      const handName = evals[idx]?.name || '';
+      return `<span class="winner-tag">${name}${handName ? ` (${handName})` : ''}</span>`;
+    }).join(' · ');
+
+    const sec = document.createElement('div');
+    sec.className = 'pot-section awarded';
+    sec.innerHTML = `
+      <div class="pot-title">${label}：<span class="pot-amt">${pot.amount.toLocaleString()}</span></div>
+      <div class="pot-winner-row">🏆 ${winText || '─'}</div>`;
+    potsEl.appendChild(sec);
   });
 
-  // 目前籌碼
+  // ── 玩家手牌揭示 ──
+  const handsEl = document.getElementById('showdown-hands');
+  if (handsEl) {
+    const notFolded = Object.entries(seats).filter(([, s]) => s.status !== 'folded');
+    const showCards = notFolded.length >= 2 && communityCards.length >= 5;
+
+    handsEl.innerHTML = notFolded.map(([i]) => {
+      const idx  = +i;
+      const name = players[idx]?.name || `玩家${idx+1}`;
+      const hole = holeCards[idx];
+      const ev   = evals[idx];
+      const isWinner = Object.values(awards).some(w =>
+        Array.isArray(w) ? w.includes(idx) : w === idx
+      );
+      const cardsHtml = (showCards && hole)
+        ? `<div class="reveal-cards">${hole.map(c=>cardHTML(c,'sm')).join('')}</div>`
+        : '';
+      return `<div class="showdown-player-row${isWinner ? ' winner' : ''}">
+        <span class="sp-name">${name}</span>
+        ${cardsHtml}
+        ${ev ? `<span class="hand-type-badge">${ev.name}</span>` : ''}
+        ${isWinner ? '<span class="winner-crown">👑</span>' : ''}
+      </div>`;
+    }).join('');
+  }
+
+  // ── 目前籌碼 ──
   const chipList = document.getElementById('showdown-chips');
   chipList.innerHTML = players.map((p, i) =>
     `<div class="chip-row">
@@ -319,6 +356,38 @@ export function renderShowdown(room, hand) {
       ${p.chips <= 0 ? `<button class="btn-rebuy" data-player-index="${i}">補充籌碼</button>` : ''}
     </div>`
   ).join('');
+}
+
+// ── 邊池計算（showdown 用，接受 seats object 或 array）──
+function calcSidePots(seats, players) {
+  const arr = Array.isArray(seats) ? seats : Object.values(seats);
+  const contributions = arr.map((s, i) => ({
+    idx: i, total: s.totalBetInHand || 0, status: s.status || 'folded'
+  })).filter(s => s.total > 0);
+
+  if (!contributions.some(s => s.status === 'allin')) {
+    return [{ amount: contributions.reduce((sum,s)=>sum+s.total,0),
+              eligible: contributions.filter(s=>s.status!=='folded').map(s=>s.idx) }];
+  }
+
+  const thresholds = [...new Set(
+    contributions.filter(s=>s.status==='allin').map(s=>s.total)
+  )].sort((a,b)=>a-b);
+
+  const pots = []; let prev = 0;
+  thresholds.forEach(t => {
+    const amt = contributions.reduce((sum,s)=>sum+Math.min(s.total,t)-Math.min(s.total,prev),0);
+    if (amt > 0) pots.push({ amount:amt, eligible: contributions.filter(s=>s.total>=t&&s.status!=='folded').map(s=>s.idx) });
+    prev = t;
+  });
+  const maxA   = thresholds[thresholds.length-1]||0;
+  const mainAmt = contributions.reduce((sum,s)=>sum+Math.max(0,s.total-maxA),0);
+  if (mainAmt>0) {
+    const el = contributions.filter(s=>s.status==='active').map(s=>s.idx);
+    if (el.length) pots.push({ amount:mainAmt, eligible:el });
+  }
+  return pots.length ? pots : [{ amount:contributions.reduce((s,c)=>s+c.total,0),
+                                  eligible:contributions.filter(s=>s.status!=='folded').map(s=>s.idx) }];
 }
 
 // 歷史紀錄
@@ -331,52 +400,6 @@ export function renderHistory(room) {
     const winner = players[h.winnerIndex]?.name || `玩家${h.winnerIndex+1}`;
     return `<tr><td>第${h.handNumber}局</td><td>${winner}</td><td>${h.potSize.toLocaleString()}</td></tr>`;
   }).join('');
-}
-
-// 邊池計算
-function calcSidePots(seats, players) {
-  const contributions = seats.map((s, i) => ({
-    idx: i,
-    total: s.totalBetInHand || 0,
-    status: s.status || 'folded'
-  })).filter(s => s.total > 0);
-
-  if (contributions.every(s => s.status !== 'allin')) {
-    const total = contributions.reduce((sum, s) => sum + s.total, 0);
-    const eligible = contributions.filter(s => s.status !== 'folded').map(s => s.idx);
-    return [{ amount: total, eligible }];
-  }
-
-  const allInAmounts = contributions
-    .filter(s => s.status === 'allin')
-    .map(s => s.total)
-    .sort((a, b) => a - b);
-
-  const thresholds = [...new Set(allInAmounts)];
-  const pots = [];
-  let prev = 0;
-
-  thresholds.forEach(threshold => {
-    const amount = contributions.reduce((sum, s) => sum + Math.min(s.total, threshold) - Math.min(s.total, prev), 0);
-    if (amount > 0) {
-      const eligible = contributions.filter(s => s.total >= threshold && s.status !== 'folded').map(s => s.idx);
-      pots.push({ amount, eligible });
-    }
-    prev = threshold;
-  });
-
-  // 主底池（超過最大全下額度的部分）
-  const maxAllin = thresholds[thresholds.length - 1] || 0;
-  const mainAmount = contributions.reduce((sum, s) => sum + Math.max(0, s.total - maxAllin), 0);
-  if (mainAmount > 0) {
-    const eligible = contributions.filter(s => s.status === 'active').map(s => s.idx);
-    if (eligible.length > 0) pots.push({ amount: mainAmount, eligible });
-  }
-
-  return pots.length > 0 ? pots : [{
-    amount: contributions.reduce((s, c) => s + c.total, 0),
-    eligible: contributions.filter(s => s.status !== 'folded').map(s => s.idx)
-  }];
 }
 
 // ── 煙火慶祝動畫 ──

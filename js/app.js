@@ -1,15 +1,16 @@
 import {
   initFirebase, roomRef, playersRef, playerRef, handRef, historyRef,
   dbSet, dbGet, dbUpdate, dbListen, dbTransaction, dbPush, serverTimestamp
-} from './firebase.js?v=6';
+} from './firebase.js?v=7';
 
 import {
   showPhase, showToast, renderWaiting,
   renderPlayerList, renderPot, renderActionPanel, renderShowdown, renderHistory,
   showFireworks, showLoserText, renderCards
-} from './ui.js?v=6';
+} from './ui.js?v=7';
 
-import { shuffleDeck } from './cards.js?v=6';
+import { shuffleDeck } from './cards.js?v=7';
+import { bestHand, compareHands } from './eval.js?v=7';
 
 // ── 本地狀態 ──────────────────────────────────────────────
 let myRoomCode = null;
@@ -18,6 +19,7 @@ let currentRoom = null;
 let unsubscribe = null;
 let pendingJoinAvatar = null;
 let pendingHostAvatar = null;
+let showdownAnimated = false;
 
 // ── 初始化 ────────────────────────────────────────────────
 export function init() {
@@ -128,11 +130,6 @@ function bindEvents() {
   });
 
   // 攤牌
-  document.getElementById('showdown-pots').addEventListener('click', e => {
-    const btn = e.target.closest('.btn-winner');
-    if (!btn) return;
-    awardPot(+btn.dataset.potIndex, +btn.dataset.winnerIndex);
-  });
   document.getElementById('showdown-chips').addEventListener('click', e => {
     const btn = e.target.closest('.btn-rebuy');
     if (!btn) return;
@@ -301,6 +298,11 @@ function renderRoom(room) {
         renderShowdown(room, hand);
         renderHistory(room);
         showPhase('showdown');
+        // 首次進入攤牌時觸發動畫
+        if (!showdownAnimated) {
+          showdownAnimated = true;
+          triggerShowdownAnimations(room, hand);
+        }
       } else {
         showGameControls();
         renderPlayerList(room, hand, myPlayerIndex);
@@ -361,6 +363,7 @@ async function onStartGame() {
 }
 
 async function startHand() {
+  showdownAnimated = false;
   const room = await dbGet(roomRef(myRoomCode));
   const players = Object.values(room.players);
   const config = room.config;
@@ -619,67 +622,120 @@ async function advanceRound(room) {
 }
 
 async function goToShowdown() {
-  await dbUpdate(handRef(myRoomCode), { round: 'showdown' });
-}
-
-// ── 分配底池 ──────────────────────────────────────────────
-async function awardPot(potIndex, winnerIndex) {
   const room = await dbGet(roomRef(myRoomCode));
   const hand = room.hand;
-
-  // 防止重複分配（多裝置同時點擊時）
-  if (hand.awards && hand.awards[potIndex] !== undefined) {
-    showToast('此底池已分配', 'info'); return;
-  }
+  if (hand?.autoAwarded) return; // 防止重複結算
 
   const players = Object.values(room.players);
-  const seats = Object.values(hand.seats);
-  const pots = calcAllSidePots(seats);
-  if (potIndex >= pots.length) return;
+  const seats = hand.seats;
+  const seatsArr = Object.values(seats);
+  const communityCards = hand.allCommunity || [];
 
-  const pot = pots[potIndex];
-  const winner = players[winnerIndex];
-  if (!winner) return;
+  const notFolded = seatsArr.filter(s => s.status !== 'folded');
 
-  const updates = {
-    [`players/${winnerIndex}/chips`]: winner.chips + pot.amount,
-    [`hand/awards/${potIndex}`]: winnerIndex
-  };
+  // 只有 2+ 人未棄牌且公共牌齊全時才做牌力評估
+  const evaluations = {};
+  if (notFolded.length >= 2 && communityCards.length >= 5) {
+    Object.entries(seats).forEach(([i, s]) => {
+      if (s.status !== 'folded' && hand.holeCards?.[i]) {
+        try { evaluations[i] = bestHand(hand.holeCards[i], communityCards); }
+        catch(e) { console.warn('eval error player', i, e); }
+      }
+    });
+  }
+
+  // 邊池計算
+  const pots = calcAllSidePots(seatsArr);
+
+  // 每個底池找贏家
+  const chipUpdates = {};
+  players.forEach((p, i) => { chipUpdates[i] = p.chips; });
+  const awards = {};
+
+  pots.forEach((pot, pi) => {
+    const { amount, eligible } = pot;
+    if (!eligible.length) return;
+
+    let winners;
+    if (eligible.length === 1 || !Object.keys(evaluations).length) {
+      winners = [eligible[0]];
+    } else {
+      let bestEval = null;
+      winners = [];
+      eligible.forEach(idx => {
+        const ev = evaluations[idx];
+        if (!ev) return;
+        const cmp = bestEval ? compareHands(ev, bestEval) : 1;
+        if (cmp > 0) { bestEval = ev; winners = [idx]; }
+        else if (cmp === 0) { winners.push(idx); }
+      });
+      if (!winners.length) winners = [eligible[0]];
+    }
+
+    const share = Math.floor(amount / winners.length);
+    const rem   = amount % winners.length;
+    winners.forEach((idx, wi) => {
+      chipUpdates[idx] = (chipUpdates[idx] || 0) + share + (wi === 0 ? rem : 0);
+    });
+    awards[pi] = winners.length === 1 ? winners[0] : winners;
+  });
+
+  const updates = {};
+  Object.entries(chipUpdates).forEach(([i, chips]) => {
+    updates[`players/${i}/chips`] = chips;
+  });
+  updates['hand/awards']       = awards;
+  updates['hand/round']        = 'showdown';
+  updates['hand/communityCards'] = communityCards;
+  updates['hand/autoAwarded']  = true;
+
+  if (Object.keys(evaluations).length) {
+    const evalStore = {};
+    Object.entries(evaluations).forEach(([i, e]) => {
+      evalStore[i] = { name: e.name, value: e.value };
+    });
+    updates['hand/evaluations'] = evalStore;
+  }
+
   await dbUpdate(roomRef(myRoomCode), updates);
-  showToast(`${winner.name} 贏得 ${pot.amount.toLocaleString()} 籌碼`);
 
-  // 全下贏家：放煙火；其他可贏玩家顯示「傻逼」
-  const winnerWasAllin = hand.seats[winnerIndex]?.status === 'allin';
-  if (winnerWasAllin) {
-    showFireworks();
-    const losers = pot.eligible.filter(idx => idx !== winnerIndex);
-    if (losers.length > 0) showLoserText(losers);
-  }
-
-  // 所有底池都分配完畢則結束本局
-  const awardedCount = Object.keys(hand.awards || {}).length + 1;
-  if (awardedCount >= pots.length) setTimeout(() => endHand(winnerIndex, pots), 500);
-}
-
-async function endHand(winnerIndex, pots) {
-  const room = await dbGet(roomRef(myRoomCode));
-  const players = Object.values(room.players);
-  const hand = room.hand;
-
+  // 寫入歷史
   const totalPot = pots.reduce((s, p) => s + p.amount, 0);
+  const mainWinnerRaw = awards[0];
+  const mainWinner = Array.isArray(mainWinnerRaw) ? mainWinnerRaw[0] : mainWinnerRaw;
   const historyEntry = {
     handNumber: hand.number,
     potSize: totalPot,
-    winnerIndex,
-    chipsAfter: players.map(p => p.chips)
+    winnerIndex: mainWinner,
+    chipsAfter: Object.values(chipUpdates)
   };
-
   await dbPush(historyRef(myRoomCode), historyEntry);
+}
 
-  const updates = {};
-  if (Object.keys(updates).length > 0) await dbUpdate(roomRef(myRoomCode), updates);
+// ── 攤牌動畫（在本地 Firebase 監聽觸發時執行）──
+function triggerShowdownAnimations(room, hand) {
+  const seats = hand.seats || {};
+  const awards = hand.awards || {};
+  const players = Object.values(room.players);
 
-  showToast('本局結束，準備下一局...');
+  Object.entries(awards).forEach(([pi, winnerRaw]) => {
+    const winners = Array.isArray(winnerRaw) ? winnerRaw : [winnerRaw];
+    winners.forEach(idx => {
+      const name = players[idx]?.name || `玩家${idx+1}`;
+      const handName = hand.evaluations?.[idx]?.name || '';
+      const split = winners.length > 1 ? '（平分）' : '';
+      showToast(`🏆 ${name}${handName ? ` — ${handName}` : ''}${split} 贏了！`, 'info');
+
+      const wasAllin = seats[idx]?.status === 'allin';
+      if (wasAllin) showFireworks();
+    });
+
+    // 輸家動畫（本底池有資格但沒贏的人）
+    const pots = calcAllSidePots(Object.values(seats));
+    const eligible = pots[+pi]?.eligible || [];
+    const losers = eligible.filter(i => !winners.includes(i));
+    if (losers.length) showLoserText(losers);
+  });
 }
 
 // ── 補充籌碼 ──────────────────────────────────────────────

@@ -546,35 +546,76 @@ input:focus { border-color: var(--red); }
 #raise-custom-input { font-size: 16px; }
 
 /* ─────────────── 攤牌 ─────────────── */
-#screen-showdown .scroll-area { display: flex; flex-direction: column; gap: 16px; }
+#screen-showdown .scroll-area { display: flex; flex-direction: column; gap: 14px; }
+
+/* 公共牌（攤牌畫面） */
+.showdown-community-cards {
+  display: flex; gap: 6px; justify-content: center; padding: 10px 0;
+}
+
+/* 底池結果卡片 */
 .pot-section {
   background: var(--panel);
   border-radius: 10px;
   padding: 12px 14px;
   border: 1px solid var(--border);
 }
-.pot-section.awarded { opacity: 0.5; pointer-events: none; }
-.pot-title { font-size: 14px; color: var(--text-dim); margin-bottom: 10px; }
-.pot-title strong { color: var(--gold); }
-.winner-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-.btn-winner {
-  flex: 1;
-  min-width: 80px;
-  padding: 12px 10px;
+.pot-section.awarded { border-color: var(--gold-dim); }
+.pot-title { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
+.pot-amt { color: var(--gold); font-weight: 700; }
+.pot-winner-row { font-size: 14px; font-weight: 600; }
+.winner-tag {
+  display: inline-block;
   background: var(--red-dark);
-  border: none;
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
+  color: #fff;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  margin-right: 4px;
 }
-.btn-winner:active { opacity: 0.7; }
+
+/* 玩家手牌揭示區 */
+.showdown-hands { display: flex; flex-direction: column; gap: 10px; }
+.showdown-player-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.showdown-player-row.winner {
+  border-color: var(--gold);
+  background: #1a1000;
+  box-shadow: 0 0 12px rgba(255,215,0,0.25);
+}
+.sp-name { font-size: 14px; font-weight: 600; min-width: 60px; }
+.reveal-cards { display: flex; gap: 4px; }
+.hand-type-badge {
+  background: #2a1800;
+  border: 1px solid var(--gold-dim);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.showdown-player-row.winner .hand-type-badge {
+  background: var(--gold);
+  color: #000;
+  border-color: var(--gold);
+}
+.winner-crown { font-size: 16px; margin-left: auto; }
+
 .showdown-chips { margin-top: 4px; }
 .showdown-chips h3 { font-size: 13px; color: var(--text-dim); margin-bottom: 8px; }
 .chip-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 8px 0;
   border-bottom: 1px solid var(--border);
   font-size: 14px;
