@@ -1,13 +1,15 @@
 import {
   initFirebase, roomRef, playersRef, playerRef, handRef, historyRef,
   dbSet, dbGet, dbUpdate, dbListen, dbTransaction, dbPush, serverTimestamp
-} from './firebase.js?v=5';
+} from './firebase.js?v=6';
 
 import {
   showPhase, showToast, renderWaiting,
   renderPlayerList, renderPot, renderActionPanel, renderShowdown, renderHistory,
-  showFireworks, showLoserText
-} from './ui.js?v=5';
+  showFireworks, showLoserText, renderCards
+} from './ui.js?v=6';
+
+import { shuffleDeck } from './cards.js?v=6';
 
 // ── 本地狀態 ──────────────────────────────────────────────
 let myRoomCode = null;
@@ -222,13 +224,14 @@ async function onCreateRoom() {
   const startingChips = +document.getElementById('starting-chips').value || 5000;
   const smallBlind = +document.getElementById('small-blind').value || 25;
   const bigBlind = +document.getElementById('big-blind').value || 50;
+  const bbAnte = document.getElementById('bb-ante-toggle')?.checked || false;
 
   const code = generateCode();
   const roomData = {
     code,
     status: 'waiting',
     createdAt: Date.now(),
-    config: { playerCount, startingChips, smallBlind, bigBlind },
+    config: { playerCount, startingChips, smallBlind, bigBlind, bbAnte },
     players: {
       0: { name: hostName, chips: startingChips, isActive: true, ...(pendingHostAvatar ? { avatar: pendingHostAvatar } : {}) }
     }
@@ -286,6 +289,7 @@ function renderRoom(room) {
     case 'waiting':
       renderPlayerList(room, null, myPlayerIndex);
       renderPot(null);
+      renderCards(null, myPlayerIndex);
       renderPreGame(room, myPlayerIndex);
       showPhase('hand');
       break;
@@ -293,6 +297,7 @@ function renderRoom(room) {
       if (hand?.round === 'showdown') {
         renderPlayerList(room, hand, myPlayerIndex);
         renderPot(hand);
+        renderCards(hand, myPlayerIndex);
         renderShowdown(room, hand);
         renderHistory(room);
         showPhase('showdown');
@@ -300,6 +305,7 @@ function renderRoom(room) {
         showGameControls();
         renderPlayerList(room, hand, myPlayerIndex);
         renderPot(hand);
+        renderCards(hand, myPlayerIndex);
         renderActionPanel(room, hand, myPlayerIndex);
         document.getElementById('btn-show-history-hand').style.display = 'block';
         showPhase('hand');
@@ -399,18 +405,42 @@ async function startHand() {
   if (updatedPlayers[bbIdx].chips === 0) seats[bbIdx].status = 'allin';
   seats[bbIdx].hasActed = false; // BB 保留加注選項
 
+  // BB Ante（Natural8 Cash Game 規則：BB 額外付前注入底池）
+  let antePot = 0;
+  if (config.bbAnte && updatedPlayers[bbIdx].chips > 0) {
+    const anteAmt = Math.min(bb, updatedPlayers[bbIdx].chips);
+    updatedPlayers[bbIdx].chips -= anteAmt;
+    seats[bbIdx].totalBetInHand += anteAmt;
+    antePot = anteAmt;
+    if (updatedPlayers[bbIdx].chips === 0) seats[bbIdx].status = 'allin';
+  }
+
   const currentBet = bbActual;
+
+  // 發牌
+  const deck = shuffleDeck();
+  let deckIdx = 0;
+  const activeIndices = players.map((_, i) => i).filter(i => players[i].chips > 0);
+  const holeCards = {};
+  activeIndices.forEach(i => {
+    holeCards[i] = [deck[deckIdx++], deck[deckIdx++]];
+  });
+  // 預先切出 5 張公共牌（翻牌時才逐步揭露）
+  const allCommunity = [deck[deckIdx++], deck[deckIdx++], deck[deckIdx++], deck[deckIdx++], deck[deckIdx++]];
 
   const hand = {
     number: handNumber,
     dealerIndex: dealerIdx,
-    pot: 0,
+    pot: antePot,
     round: 'preflop',
     currentBet,
     lastRaiseSize: bb,
     actionIndex: firstActIdx,
     bigBlind: bb,
-    seats
+    seats,
+    holeCards,
+    allCommunity,
+    communityCards: []
   };
 
   await dbUpdate(roomRef(myRoomCode), { players: updatedPlayers, hand });
@@ -569,9 +599,16 @@ async function advanceRound(room) {
   const firstAct = nextActiveIdx(hand.dealerIndex, players);
   updates['hand/actionIndex'] = firstAct;
 
-  // 若所有玩家都全下，跳到 showdown
+  // 揭露公共牌
+  const allCom = hand.allCommunity || [];
+  if (nextRound === 'flop')  updates['hand/communityCards'] = allCom.slice(0, 3);
+  if (nextRound === 'turn')  updates['hand/communityCards'] = allCom.slice(0, 4);
+  if (nextRound === 'river') updates['hand/communityCards'] = allCom.slice(0, 5);
+
+  // 若所有玩家都全下，跳到 showdown（先揭露所有公共牌）
   const active = Object.values(seats).filter(s => s.status === 'active');
   if (active.length === 0) {
+    await dbUpdate(roomRef(myRoomCode), { 'hand/communityCards': allCom.slice(0, 5) });
     await goToShowdown();
     return;
   }

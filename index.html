@@ -75,6 +75,16 @@
           </div>
         </div>
       </div>
+      <div>
+        <div class="section-label">大盲前注（BB Ante）</div>
+        <div class="ante-row">
+          <label class="toggle-label">
+            <input type="checkbox" id="bb-ante-toggle">
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">開啟（每局 BB 需額外付 1 大盲前注）</span>
+          </label>
+        </div>
+      </div>
     </div>
     <div class="setup-footer">
       <button id="btn-create-room" class="btn btn-gold">建立房間</button>
@@ -119,6 +129,7 @@
     <div id="table-wrapper">
       <div id="table-felt">
         <div id="table-center">
+          <div id="community-cards" class="community-cards"></div>
           <div class="table-pot-label">底池</div>
           <div id="table-pot-val">0</div>
           <div id="table-round-label">翻牌前</div>
@@ -130,6 +141,11 @@
     <div id="action-area">
       <div id="actor-label" class="actor-label">
         <div id="actor-name"></div>
+      </div>
+
+      <div id="my-hole-cards" class="my-hole-cards" style="display:none">
+        <div class="my-cards-label">我的手牌</div>
+        <div id="my-cards-row" class="my-cards-row"></div>
       </div>
 
       <div id="waiting-msg">等待中...</div>
@@ -243,6 +259,6 @@
 
 <div id="toast"></div>
 
-<script type="module" src="js/app.js?v=5"></script>
+<script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>

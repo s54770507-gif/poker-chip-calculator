@@ -159,6 +159,27 @@ input:focus { border-color: var(--red); }
 .name-label { width: 48px; font-size: 13px; color: var(--text-dim); flex-shrink: 0; }
 .blind-row { display: flex; gap: 10px; }
 .blind-row > div { flex: 1; }
+
+/* BB Ante 開關 */
+.ante-row { margin-top: 6px; }
+.toggle-label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.toggle-label input { display: none; }
+.toggle-switch {
+  width: 42px; height: 24px;
+  background: #333; border-radius: 12px;
+  position: relative; flex-shrink: 0;
+  transition: background .2s;
+}
+.toggle-switch::after {
+  content: ''; position: absolute;
+  left: 3px; top: 3px;
+  width: 18px; height: 18px;
+  background: #888; border-radius: 50%;
+  transition: left .2s, background .2s;
+}
+.toggle-label input:checked + .toggle-switch { background: var(--red-dark); }
+.toggle-label input:checked + .toggle-switch::after { left: 21px; background: #fff; }
+.toggle-text { font-size: 13px; color: var(--text-dim); }
 .setup-footer { padding: 12px 16px 20px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
 
 /* ─────────────── 等待室 ─────────────── */
@@ -267,7 +288,9 @@ input:focus { border-color: var(--red); }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 2px;
+  overflow: hidden;
+  padding: 6px 4px;
 }
 .table-pot-label { font-size: 10px; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: 1px; }
 #table-pot-val   { font-size: 18px; font-weight: 700; color: var(--gold); }
@@ -694,3 +717,121 @@ input:focus { border-color: var(--red); }
   white-space: nowrap;
 }
 .btn-rebuy:active { opacity: 0.75; }
+
+/* ══════════════════════════════════════════
+   撲克牌
+══════════════════════════════════════════ */
+.card {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  border-radius: 3px;
+  border: 1px solid #bbb;
+  font-weight: 800;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.8);
+  flex-shrink: 0;
+  user-select: none;
+  line-height: 1;
+  gap: 0;
+}
+.card.red  { color: #cc1111; }
+.card.black { color: #111; }
+
+/* 尺寸 */
+.card-xs  { width: 18px; height: 25px; font-size: 7px;  border-radius: 2px; gap: 0; }
+.card-sm  { width: 26px; height: 36px; font-size: 10px; border-radius: 3px; }
+.card-md  { width: 36px; height: 50px; font-size: 13px; }
+.card-lg  { width: 54px; height: 76px; font-size: 20px; border-radius: 5px; gap: 2px; }
+
+.card .cr { line-height: 1; }
+.card .cs { font-size: 0.78em; line-height: 1; margin-top: -1px; }
+.card-xs .cs { margin-top: -2px; }
+.card-lg .cr { font-size: 1em; }
+.card-lg .cs { font-size: 0.85em; }
+
+/* 牌背 */
+.card-back {
+  background:
+    repeating-linear-gradient(45deg, #1a237e 0px, #1a237e 3px, #283593 3px, #283593 6px);
+  border: 2px solid #3949ab;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+
+/* 公共牌區（桌面中央） */
+.community-cards {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  align-items: center;
+  min-height: 52px;
+  flex-wrap: nowrap;
+  padding: 4px 0;
+}
+.community-cards:empty { min-height: 0; padding: 0; }
+
+/* 座位牌背 */
+.seat-cards {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+/* 我的手牌（行動區上方） */
+.my-hole-cards {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0 2px;
+  flex-shrink: 0;
+  animation: cardDeal 0.35s ease-out;
+}
+.my-cards-label {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.my-cards-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+@keyframes cardDeal {
+  from { opacity: 0; transform: translateY(-8px) scale(0.9); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 公共牌卡片進場動畫 */
+.card-enter {
+  animation: cardFlip 0.3s ease-out;
+}
+@keyframes cardFlip {
+  0%   { transform: rotateY(90deg) scale(0.8); opacity: 0; }
+  100% { transform: rotateY(0deg)  scale(1);   opacity: 1; }
+}
+
+/* 底池賠率標籤 */
+.pot-odds {
+  font-size: 10px;
+  color: var(--text-dim);
+  display: block;
+  margin-top: 1px;
+}
+
+/* 跟注全下時特殊樣式 */
+#btn-call.allin-call { background: #7a1a00; border: 1px solid var(--red); }
+
+/* Natural8 風格：手牌資訊列 */
+.hand-info-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+  padding: 2px 0;
+}
+.hand-info-row span { color: var(--text); }

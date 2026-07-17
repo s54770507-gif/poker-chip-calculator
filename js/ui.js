@@ -1,4 +1,5 @@
 // ── 純渲染函式，不含任何遊戲邏輯 ──
+import { cardHTML, cardBackHTML } from './cards.js?v=6';
 
 export function showPhase(phase) {
   document.getElementById('app').className = `phase-${phase}`;
@@ -94,6 +95,18 @@ export function renderPlayerList(room, hand, myIndex) {
       ? `<div class="seat-bet-chip">+${hs.bet.toLocaleString()}</div>`
       : '';
 
+    // 座位牌：未棄牌且有手牌時顯示牌背（或自己的實際牌）
+    const holeCards = hand?.holeCards || {};
+    let seatCardsHtml = '';
+    if (hand && status !== 'folded' && holeCards[i] !== undefined) {
+      if (isMe) {
+        const [c1, c2] = holeCards[i];
+        seatCardsHtml = `<div class="seat-cards">${cardHTML(c1,'xs')}${cardHTML(c2,'xs')}</div>`;
+      } else {
+        seatCardsHtml = `<div class="seat-cards">${cardBackHTML('xs')}${cardBackHTML('xs')}</div>`;
+      }
+    }
+
     const hasAvatar = !!p.avatar;
     el.innerHTML = hasAvatar
       ? `<div class="seat-inner has-avatar" style="background-image:url('${p.avatar}')">
@@ -101,6 +114,7 @@ export function renderPlayerList(room, hand, myIndex) {
              <div class="seat-name">${p.name.slice(0, 7)}</div>
              <div class="seat-amount">${p.chips.toLocaleString()}</div>
              ${betHtml}
+             ${seatCardsHtml}
            </div>
          </div>
          <div class="seat-badges">${badges}</div>`
@@ -110,6 +124,7 @@ export function renderPlayerList(room, hand, myIndex) {
            <div class="chip-stacks">${buildChipStacks(p.chips)}</div>
            <div class="seat-amount">${p.chips.toLocaleString()}</div>
            ${betHtml}
+           ${seatCardsHtml}
          </div>
          <div class="seat-badges">${badges}</div>`;
     seats.appendChild(el);
@@ -132,6 +147,31 @@ export function renderPot(hand) {
   if (rn) rn.textContent = rName;
   const hn = document.getElementById('hand-number');
   if (hn) hn.textContent = `第 ${hand?.number || 1} 局`;
+}
+
+// 公共牌 + 我的手牌
+export function renderCards(hand, myIndex) {
+  // 公共牌
+  const comEl = document.getElementById('community-cards');
+  if (comEl) {
+    const cards = hand?.communityCards || [];
+    comEl.innerHTML = cards.map(c => `<div class="card-enter">${cardHTML(c, 'sm')}</div>`).join('');
+  }
+
+  // 我的手牌
+  const holeEl = document.getElementById('my-hole-cards');
+  const rowEl  = document.getElementById('my-cards-row');
+  if (!holeEl || !rowEl) return;
+
+  const myCards = hand?.holeCards?.[myIndex];
+  if (myCards && hand?.round !== 'showdown') {
+    const [c1, c2] = myCards;
+    rowEl.innerHTML = `${cardHTML(c1, 'lg')}${cardHTML(c2, 'lg')}`;
+    holeEl.style.display = 'flex';
+  } else {
+    holeEl.style.display = 'none';
+    rowEl.innerHTML = '';
+  }
 }
 
 // ── 工具：座位位置（直式橢圓）──
@@ -198,7 +238,18 @@ export function renderActionPanel(room, hand, myIndex) {
   btnCall.style.display = canCall ? 'block' : 'none';
   if (canCall) {
     const actualCall = Math.min(callAmount, myChips);
-    btnCall.textContent = actualCall >= myChips ? `跟注全下 (${actualCall.toLocaleString()})` : `跟注 (${actualCall.toLocaleString()})`;
+    const isAllinCall = actualCall >= myChips;
+    const pot = hand?.pot || 0;
+    const oddsRatio = actualCall > 0 ? ((pot + actualCall) / actualCall).toFixed(1) : '–';
+    const oddsLabel = `<span class="pot-odds">賠率 ${oddsRatio}:1</span>`;
+    if (isAllinCall) {
+      btnCall.className = 'action-btn allin-call';
+      btnCall.innerHTML = `跟注全下<br><span style="font-size:13px">(${actualCall.toLocaleString()})</span>`;
+    } else {
+      btnCall.className = 'action-btn';
+      btnCall.innerHTML = `跟注 ${actualCall.toLocaleString()}${oddsLabel}`;
+    }
+    btnCall.id = 'btn-call';
   }
 
   // 加注尺寸預設按鈕
