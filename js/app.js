@@ -596,7 +596,9 @@ async function advanceRound(room) {
   Object.keys(seats).forEach(i => {
     if (seats[i].status === 'active') updates[`hand/seats/${i}/hasActed`] = false;
   });
-  const firstAct = nextActiveIdx(hand.dealerIndex, players);
+  // 翻牌後首位行動者：dealer 後第一位「尚未棄牌」的玩家
+  const firstAct = nextActionIdx(hand.dealerIndex, hand.seats, players.length);
+  if (firstAct === null) { await goToShowdown(); return; }
   updates['hand/actionIndex'] = firstAct;
 
   // 揭露公共牌
