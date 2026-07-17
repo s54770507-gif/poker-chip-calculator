@@ -94,9 +94,12 @@ export function renderPlayerList(room, hand, myIndex) {
       ? `<div class="seat-bet-chip">+${hs.bet.toLocaleString()}</div>`
       : '';
 
+    const avatarContent = p.avatar
+      ? `<img src="${p.avatar}" alt="${p.name[0]}">`
+      : p.name[0].toUpperCase();
     el.innerHTML = `
       <div class="seat-inner">
-        <div class="seat-avatar">${p.name[0].toUpperCase()}</div>
+        <div class="seat-avatar">${avatarContent}</div>
         <div class="seat-name">${p.name.slice(0, 7)}</div>
         <div class="chip-stacks">${buildChipStacks(p.chips)}</div>
         <div class="seat-amount">${p.chips.toLocaleString()}</div>

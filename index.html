@@ -37,6 +37,11 @@
     <div class="scroll-area">
       <div>
         <div class="section-label">你的名字</div>
+        <div class="avatar-upload-row">
+          <label for="host-avatar-input" class="avatar-pick" id="host-avatar-preview">📷</label>
+          <input type="file" id="host-avatar-input" accept="image/*" style="display:none">
+          <span class="avatar-pick-hint">點擊上傳頭像（選填）</span>
+        </div>
         <input type="text" id="host-name" maxlength="10" placeholder="輸入你的名字" autocomplete="off">
       </div>
       <div>
@@ -219,6 +224,11 @@
     <div id="join-mode">
       <h2>加入房間</h2>
       <p id="join-room-info">輸入你的名字</p>
+      <div class="avatar-upload-row" style="margin:10px 0 6px">
+        <label for="join-avatar-input" class="avatar-pick" id="join-avatar-preview">📷</label>
+        <input type="file" id="join-avatar-input" accept="image/*" style="display:none">
+        <span class="avatar-pick-hint">點擊上傳頭像（選填）</span>
+      </div>
       <input type="text" id="join-name-input" maxlength="10" placeholder="你的名字" autocomplete="off" style="margin-bottom:10px">
       <button id="btn-confirm-join" class="btn btn-gold">加入</button>
       <button id="btn-cancel-join" class="btn btn-secondary" style="margin-top:8px">取消</button>
@@ -233,6 +243,6 @@
 
 <div id="toast"></div>
 
-<script type="module" src="js/app.js?v=3"></script>
+<script type="module" src="js/app.js?v=4"></script>
 </body>
 </html>

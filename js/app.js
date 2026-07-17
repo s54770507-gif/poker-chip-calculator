@@ -1,19 +1,21 @@
 import {
   initFirebase, roomRef, playersRef, playerRef, handRef, historyRef,
   dbSet, dbGet, dbUpdate, dbListen, dbTransaction, dbPush, serverTimestamp
-} from './firebase.js?v=3';
+} from './firebase.js?v=4';
 
 import {
   showPhase, showToast, renderWaiting,
   renderPlayerList, renderPot, renderActionPanel, renderShowdown, renderHistory,
   showFireworks, showLoserText
-} from './ui.js?v=3';
+} from './ui.js?v=4';
 
 // ── 本地狀態 ──────────────────────────────────────────────
 let myRoomCode = null;
 let myPlayerIndex = null;
 let currentRoom = null;
 let unsubscribe = null;
+let pendingJoinAvatar = null;
+let pendingHostAvatar = null;
 
 // ── 初始化 ────────────────────────────────────────────────
 export function init() {
@@ -89,12 +91,17 @@ function bindEvents() {
     document.getElementById('join-mode').style.display = '';
     document.getElementById('switch-mode').style.display = 'none';
   });
+  setupAvatarPicker('join-avatar-input', 'join-avatar-preview', b64 => { pendingJoinAvatar = b64; });
+  setupAvatarPicker('host-avatar-input', 'host-avatar-preview', b64 => { pendingHostAvatar = b64; });
+
   document.getElementById('btn-confirm-join').addEventListener('click', doJoinRoom);
   document.getElementById('join-name-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') doJoinRoom();
   });
   document.getElementById('btn-cancel-join').addEventListener('click', () => {
     document.getElementById('player-select-overlay').classList.add('hidden');
+    pendingJoinAvatar = null;
+    resetAvatarPreview('join-avatar-preview');
   });
 
   // 遊戲行動
@@ -179,12 +186,14 @@ async function doJoinRoom() {
       const count = Object.keys(players).length;
       if (count >= playerCount) return; // 已滿，放棄
       assignedIdx = count;
-      players[count] = { name, chips: startingChips, isActive: true };
+      players[count] = { name, chips: startingChips, isActive: true, ...(pendingJoinAvatar ? { avatar: pendingJoinAvatar } : {}) };
       return players;
     });
 
     if (assignedIdx === null) { showToast('房間已滿', 'error'); return; }
 
+    pendingJoinAvatar = null;
+    resetAvatarPreview('join-avatar-preview');
     myRoomCode = code;
     myPlayerIndex = assignedIdx;
     saveLocal(code, assignedIdx);
@@ -214,12 +223,14 @@ async function onCreateRoom() {
     createdAt: Date.now(),
     config: { playerCount, startingChips, smallBlind, bigBlind },
     players: {
-      0: { name: hostName, chips: startingChips, isActive: true }
+      0: { name: hostName, chips: startingChips, isActive: true, ...(pendingHostAvatar ? { avatar: pendingHostAvatar } : {}) }
     }
   };
 
   try {
     await dbSet(roomRef(code), roomData);
+    pendingHostAvatar = null;
+    resetAvatarPreview('host-avatar-preview');
     myRoomCode = code;
     myPlayerIndex = 0;
     saveLocal(code, 0);
@@ -709,6 +720,45 @@ function calcAllSidePots(seats) {
     amount: contributions.reduce((s, c) => s + c.total, 0),
     eligible: contributions.filter(s => s.status !== 'folded').map(s => s.idx)
   }];
+}
+
+// ── 頭像工具 ──────────────────────────────────────────────
+function setupAvatarPicker(inputId, previewId, onReady) {
+  const input = document.getElementById(inputId);
+  input.addEventListener('change', async () => {
+    const file = input.files[0];
+    if (!file) return;
+    const b64 = await resizeImageToBase64(file);
+    if (b64) {
+      onReady(b64);
+      const preview = document.getElementById(previewId);
+      preview.innerHTML = `<img src="${b64}" alt="">`;
+    }
+    input.value = '';
+  });
+}
+
+function resetAvatarPreview(previewId) {
+  const preview = document.getElementById(previewId);
+  if (preview) preview.innerHTML = '📷';
+}
+
+function resizeImageToBase64(file) {
+  return new Promise(resolve => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const s = Math.min(img.width, img.height);
+      ctx.drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 64, 64);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', 0.65));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
 }
 
 // 啟動
