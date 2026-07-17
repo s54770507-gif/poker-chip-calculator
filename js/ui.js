@@ -53,7 +53,7 @@ export function renderPlayerList(room, hand, myIndex) {
     const isEmpty = !p;
 
     if (isEmpty) {
-      const { x, y } = seatPos(i, n);
+      const { x, y } = seatPos(i, n, myIndex);
       const el = document.createElement('div');
       el.className = 'player-seat empty';
       el.dataset.seatIndex = i;
@@ -77,7 +77,7 @@ export function renderPlayerList(room, hand, myIndex) {
     const isAction = i === hand?.actionIndex;
     const status = hs.status || 'active';
 
-    const { x, y } = seatPos(i, n);
+    const { x, y } = seatPos(i, n, myIndex);
     const el = document.createElement('div');
     el.className = ['player-seat', isMe ? 'me' : '', isAction ? 'acting' : '', status === 'folded' ? 'folded' : ''].filter(Boolean).join(' ');
     el.dataset.seatIndex = i;
@@ -174,12 +174,13 @@ export function renderCards(hand, myIndex) {
   }
 }
 
-// ── 工具：座位位置（直式橢圓）──
-function seatPos(i, n) {
-  const angle = (Math.PI / 2) + (2 * Math.PI * i / n);
+// ── 工具：座位位置（直式橢圓，myIndex 永遠在最下方）──
+function seatPos(i, n, myIndex = 0) {
+  // -π/2 (270°) = 桌面最下方；以 myIndex 為基準旋轉
+  const angle = (-Math.PI / 2) + (2 * Math.PI * (i - myIndex) / n);
   return {
-    x: 50 + 39 * Math.cos(angle),  // 水平半徑
-    y: 50 - 42 * Math.sin(angle),  // 垂直半徑較大（直式）
+    x: 50 + 39 * Math.cos(angle),
+    y: 50 - 42 * Math.sin(angle),
   };
 }
 
