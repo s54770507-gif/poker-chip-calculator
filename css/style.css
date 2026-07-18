@@ -234,6 +234,26 @@ input:focus { border-color: var(--red); }
 }
 #my-player-name { font-size: 13px; color: var(--gold-dim); }
 #my-player-name::before { content: '你是：'; color: var(--text-dim); }
+.bar-left-icons { display: flex; align-items: center; gap: 3px; }
+.icon-btn {
+  width: 28px; height: 28px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.05);
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: background .15s, color .15s;
+  flex-shrink: 0;
+}
+.icon-btn:active { background: rgba(255,255,255,0.14); color: var(--text); }
+#btn-leave-hand.icon-btn { color: #cc6666; border-color: #5a2222; }
+#btn-leave-hand.icon-btn:active { background: #3a1010; }
 .bar-right { display: flex; align-items: center; gap: 8px; }
 #room-code-badge {
   font-size: 12px;
@@ -744,6 +764,23 @@ input:focus { border-color: var(--red); }
 .avatar-pick:active { border-color: var(--gold); }
 .avatar-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .avatar-pick-hint { font-size: 11px; color: var(--text-dim); }
+
+/* ── 座位補充籌碼按鈕 ── */
+.seat-rebuy-btn {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 5px;
+  background: var(--gold);
+  color: #000;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-top: 2px;
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+.seat-rebuy-btn:active { opacity: 0.75; }
 
 /* ── 補充籌碼 ── */
 .btn-rebuy {

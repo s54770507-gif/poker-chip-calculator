@@ -119,6 +119,10 @@
       <span id="round-name">翻牌前</span>
     </div>
     <div id="my-player-bar">
+      <div class="bar-left-icons">
+        <button id="btn-leave-hand"         class="icon-btn" title="離開房間">✕</button>
+        <button id="btn-show-history-hand"  class="icon-btn btn-history" title="查看歷史紀錄" style="display:none">≡</button>
+      </div>
       <span id="my-player-name">─</span>
       <div class="bar-right">
         <span id="room-code-badge" title="房間代碼"></span>
@@ -187,8 +191,6 @@
         <div id="pregame-waiting" class="pregame-waiting" style="display:none">等待房主開始遊戲...</div>
       </div>
 
-      <button id="btn-show-history-hand" class="btn btn-secondary btn-history" style="display:none;flex-shrink:0">查看歷史紀錄</button>
-      <button id="btn-leave-hand" class="btn btn-secondary" style="flex-shrink:0;opacity:0.5;font-size:13px;padding:10px">離開房間</button>
     </div>
   </div>
 
@@ -270,6 +272,6 @@
 
 <div id="toast"></div>
 
-<script type="module" src="js/app.js?v=9"></script>
+<script type="module" src="js/app.js?v=10"></script>
 </body>
 </html>

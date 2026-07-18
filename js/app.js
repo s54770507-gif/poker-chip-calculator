@@ -8,7 +8,7 @@ import {
   renderPlayerList, renderPot, renderActionPanel, renderHistory,
   showFireworks, showLoserText, renderCards,
   showWinnerOverlay, animateDealCards
-} from './ui.js?v=9';
+} from './ui.js?v=10';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
@@ -133,7 +133,17 @@ function bindEvents() {
     if (val > 0) handleAction('raise', val);
   });
 
-  // 攤牌
+  // 座位補充籌碼（爆牌玩家座位上的按鈕）
+  document.getElementById('player-seats').addEventListener('click', e => {
+    const btn = e.target.closest('.seat-rebuy-btn');
+    if (btn) handleRebuy(+btn.dataset.playerIndex);
+  });
+
+  // 結算 overlay 補充籌碼 & 攤牌舊畫面（保留相容）
+  document.getElementById('winner-overlay')?.addEventListener('click', e => {
+    const btn = e.target.closest('.btn-rebuy');
+    if (btn) handleRebuy(+btn.dataset.playerIndex);
+  });
   document.getElementById('showdown-chips').addEventListener('click', e => {
     const btn = e.target.closest('.btn-rebuy');
     if (!btn) return;
@@ -146,12 +156,6 @@ function bindEvents() {
     btn.addEventListener('click', () => showPhase('history'))
   );
   document.getElementById('btn-back-game').addEventListener('click', () => showPhase('hand'));
-
-  // 結算 overlay 補充籌碼
-  document.getElementById('winner-overlay')?.addEventListener('click', e => {
-    const btn = e.target.closest('.btn-rebuy');
-    if (btn) handleRebuy(+btn.dataset.playerIndex);
-  });
 }
 
 // ── 首頁操作 ──────────────────────────────────────────────
@@ -167,7 +171,7 @@ function onClickJoin() {
   dbGet(roomRef(code)).then(room => {
     if (!room) { showToast('找不到此房間', 'error'); return; }
     if (room.status === 'finished') { showToast('此房間已結束', 'error'); return; }
-    const joined = Object.keys(room.players || {}).length;
+    const joined = Object.values(room.players || {}).filter(p => p?.isActive !== false).length;
     const max = room.config?.playerCount || 0;
     if (joined >= max) { showToast('房間已滿', 'error'); return; }
     document.getElementById('join-room-info').textContent =
@@ -192,14 +196,19 @@ async function doJoinRoom() {
     const startingChips = room.config.startingChips;
     const playerCount = room.config.playerCount;
 
-    // 用 transaction 安全搶位
+    // 用 transaction 安全搶位（優先重用已離開玩家的空位）
     let assignedIdx = null;
     await dbTransaction(playersRef(code), (players) => {
       if (!players) players = {};
-      const count = Object.keys(players).length;
-      if (count >= playerCount) return; // 已滿，放棄
-      assignedIdx = count;
-      players[count] = { name, chips: startingChips, isActive: true, ...(pendingJoinAvatar ? { avatar: pendingJoinAvatar } : {}) };
+      const activeCount = Object.values(players).filter(p => p?.isActive !== false).length;
+      if (activeCount >= playerCount) return; // 已滿，放棄
+      // 找第一個已離開的空位，否則追加在末尾
+      let slot = Object.keys(players).length;
+      for (const [key, p] of Object.entries(players)) {
+        if (p?.isActive === false) { slot = +key; break; }
+      }
+      assignedIdx = slot;
+      players[slot] = { name, chips: startingChips, isActive: true, ...(pendingJoinAvatar ? { avatar: pendingJoinAvatar } : {}) };
       return players;
     });
 
@@ -291,6 +300,7 @@ function renderRoom(room) {
   const hand = room.hand;
   switch (room.status) {
     case 'waiting':
+      document.getElementById('btn-show-history-hand').style.display = 'none';
       renderPlayerList(room, null, myPlayerIndex);
       renderPot(null);
       renderCards(null, myPlayerIndex);
@@ -354,7 +364,7 @@ function renderRoom(room) {
 function renderPreGame(room, myIndex) {
   const players = Object.values(room.players || {});
   const total = room.config?.playerCount || 0;
-  const joined = players.length;
+  const joined = players.filter(p => p?.isActive !== false).length;
   const isHost = myIndex === 0;
 
   // 隱藏遊戲行動，顯示等待面板

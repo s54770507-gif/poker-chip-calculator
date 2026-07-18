@@ -126,6 +126,9 @@ export function renderPlayerList(room, hand, myIndex) {
       }
     }
 
+    const rebuyHtml = (p.chips <= 0)
+      ? `<button class="seat-rebuy-btn" data-player-index="${i}">補充籌碼</button>` : '';
+
     const hasAvatar = !!p.avatar;
     el.innerHTML = hasAvatar
       ? `<div class="seat-inner has-avatar" style="background-image:url('${p.avatar}')">
@@ -134,6 +137,7 @@ export function renderPlayerList(room, hand, myIndex) {
              <div class="seat-amount">${p.chips.toLocaleString()}</div>
              ${betHtml}
              ${seatCardsHtml}
+             ${rebuyHtml}
            </div>
          </div>
          <div class="seat-badges">${badges}</div>`
@@ -143,6 +147,7 @@ export function renderPlayerList(room, hand, myIndex) {
            <div class="seat-amount">${p.chips.toLocaleString()}</div>
            ${betHtml}
            ${seatCardsHtml}
+           ${rebuyHtml}
          </div>
          <div class="seat-badges">${badges}</div>`;
     seats.appendChild(el);
@@ -302,19 +307,20 @@ export function showWinnerOverlay(room, hand) {
     }).join('');
   }
 
-  // 籌碼彙總（含補充籌碼按鈕）
+  // 籌碼彙總（僅顯示仍在房間的玩家）
   const chipsEl = document.getElementById('winner-overlay-chips');
   if (chipsEl) {
+    const activePlayers = players.map((p, i) => ({ p, i })).filter(({ p }) => p?.isActive !== false);
     chipsEl.innerHTML = `<div class="wo-chips-section">
       <div class="wo-chips-title">目前籌碼</div>
-      ${players.map((p, i) => `
+      ${activePlayers.map(({ p, i }) => `
         <div class="wo-chip-row">
           <span>${p.name}</span>
           <span class="wo-chip-val">
             ${p.chips > 0 ? p.chips.toLocaleString() : '<span style="color:#888">爆牌</span>'}
             ${p.chips <= 0
               ? `<button class="btn-rebuy" data-player-index="${i}"
-                   style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--red-dark);border:1px solid var(--red);border-radius:5px;color:#fff;cursor:pointer">補充</button>`
+                   style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--gold);border:none;border-radius:5px;color:#000;cursor:pointer;font-weight:700">補充</button>`
               : ''}
           </span>
         </div>`).join('')}
