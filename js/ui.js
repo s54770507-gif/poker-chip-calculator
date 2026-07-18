@@ -127,6 +127,7 @@ export function renderPlayerList(room, hand, myIndex) {
       isDealer ? '<span class="badge badge-d">D</span>' : '',
       isSB ? '<span class="badge badge-sb">SB</span>' : '',
       isBB ? '<span class="badge badge-bb">BB</span>' : '',
+      hand?.straddleIndex === i ? '<span class="badge badge-st">ST</span>' : '',
       status === 'allin' ? '<span class="badge badge-allin">全下</span>' : '',
     ].join('');
 

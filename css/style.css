@@ -459,6 +459,7 @@ input:focus { border-color: var(--red); }
 .badge-sb    { background: #444; color: var(--text-dim); }
 .badge-bb    { background: #333; color: var(--text-dim); }
 .badge-allin { background: var(--red-dark); color: var(--text); }
+.badge-st    { background: #6a3db8; color: #fff; }
 
 /* 行動面板 */
 #action-area {

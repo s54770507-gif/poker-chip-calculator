@@ -9,7 +9,7 @@ import {
   showFireworks, showLoserText, renderCards,
   showWinnerOverlay, animateDealCards,
   updateRabbitSection, updateTimerUI
-} from './ui.js?v=11';
+} from './ui.js?v=12';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
@@ -261,13 +261,14 @@ async function onCreateRoom() {
   const smallBlind = +document.getElementById('small-blind').value || 25;
   const bigBlind = +document.getElementById('big-blind').value || 50;
   const bbAnte = document.getElementById('bb-ante-toggle')?.checked || false;
+  const straddle = document.getElementById('straddle-toggle')?.checked || false;
 
   const code = generateCode();
   const roomData = {
     code,
     status: 'waiting',
     createdAt: Date.now(),
-    config: { playerCount, startingChips, smallBlind, bigBlind, bbAnte },
+    config: { playerCount, startingChips, smallBlind, bigBlind, bbAnte, straddle },
     players: {
       0: { name: hostName, chips: startingChips, isActive: true, timeBank: TIME_BANK_SECONDS, ...(pendingHostAvatar ? { avatar: pendingHostAvatar } : {}) }
     }
@@ -512,7 +513,27 @@ async function startHand() {
     if (updatedPlayers[bbIdx].chips === 0) seats[bbIdx].status = 'allin';
   }
 
-  const currentBet = bbActual;
+  let currentBet = bbActual;
+  let lastRaiseSize = bb;
+  let actionIdx = firstActIdx;
+
+  // Straddle：UTG 自動抓頭 2×BB（需 3 人以上、UTG 不是盲注位）
+  let straddleIdx = null;
+  if (config.straddle) {
+    const utg = nextActiveIdx(bbIdx, players);
+    if (utg !== sbIdx && utg !== bbIdx && utg !== dealerIdx && updatedPlayers[utg].chips > 0) {
+      const stAmt = Math.min(2 * bb, updatedPlayers[utg].chips);
+      updatedPlayers[utg].chips -= stAmt;
+      seats[utg].bet = stAmt;
+      seats[utg].totalBetInHand = stAmt;
+      seats[utg].hasActed = false; // 抓頭者保留行動選擇權
+      if (updatedPlayers[utg].chips === 0) seats[utg].status = 'allin';
+      straddleIdx = utg;
+      currentBet = Math.max(currentBet, stAmt);
+      if (stAmt === 2 * bb) lastRaiseSize = 2 * bb; // 最小加注跟著抓頭額
+      actionIdx = nextActiveIdx(utg, players);
+    }
+  }
 
   // 發牌
   const deck = shuffleDeck();
@@ -531,10 +552,11 @@ async function startHand() {
     pot: antePot,
     round: 'preflop',
     currentBet,
-    lastRaiseSize: bb,
-    actionIndex: firstActIdx,
+    lastRaiseSize,
+    actionIndex: actionIdx,
     actionStart: Date.now(),
     bigBlind: bb,
+    ...(straddleIdx !== null ? { straddleIndex: straddleIdx } : {}),
     seats,
     holeCards,
     allCommunity,
