@@ -89,6 +89,26 @@ export function renderPlayerList(room, hand, myIndex) {
     }
 
     const hs = handSeats[i] || {};
+
+    // 暫離中的玩家（本局未參與時顯示暫離座位）
+    if (p.sitOut === true && hs.status !== 'active' && hs.status !== 'allin') {
+      const { x, y } = seatPos(i, n, myIndex);
+      const el = document.createElement('div');
+      el.className = 'player-seat sitout';
+      el.dataset.seatIndex = i;
+      el.style.left = x + '%';
+      el.style.top = y + '%';
+      el.innerHTML = `
+        <div class="seat-inner" style="opacity:0.45">
+          <div class="seat-avatar">⏸</div>
+          <div class="seat-name">${p.name.slice(0, 7)}</div>
+          <div class="seat-amount">${p.chips.toLocaleString()}</div>
+          <div class="seat-amount" style="color:var(--text-dim);font-size:8px">暫離中</div>
+        </div>`;
+      seats.appendChild(el);
+      continue;
+    }
+
     const isMe = i === myIndex;
     const isDealer = i === dealerIdx;
     const isSB = n > 2 ? i === ((dealerIdx + 1) % n) : i !== dealerIdx;
@@ -129,6 +149,10 @@ export function renderPlayerList(room, hand, myIndex) {
     const rebuyHtml = (p.chips <= 0)
       ? `<button class="seat-rebuy-btn" data-player-index="${i}">補充籌碼</button>` : '';
 
+    // 行動計時條（輪到此玩家時顯示，寬度由計時迴圈更新）
+    const timerHtml = (isAction && status === 'active' && hand && hand.round !== 'showdown')
+      ? '<div class="seat-timer"><div class="seat-timer-fill" style="width:100%"></div></div>' : '';
+
     const hasAvatar = !!p.avatar;
     el.innerHTML = hasAvatar
       ? `<div class="seat-inner has-avatar" style="background-image:url('${p.avatar}')">
@@ -140,7 +164,8 @@ export function renderPlayerList(room, hand, myIndex) {
              ${rebuyHtml}
            </div>
          </div>
-         <div class="seat-badges">${badges}</div>`
+         <div class="seat-badges">${badges}</div>
+         ${timerHtml}`
       : `<div class="seat-inner">
            <div class="seat-avatar">${p.name[0].toUpperCase()}</div>
            <div class="seat-name">${p.name.slice(0, 7)}</div>
@@ -149,7 +174,8 @@ export function renderPlayerList(room, hand, myIndex) {
            ${seatCardsHtml}
            ${rebuyHtml}
          </div>
-         <div class="seat-badges">${badges}</div>`;
+         <div class="seat-badges">${badges}</div>
+         ${timerHtml}`;
     seats.appendChild(el);
   }
 }
@@ -327,7 +353,50 @@ export function showWinnerOverlay(room, hand) {
     </div>`;
   }
 
+  // 兔子洞區塊（提前結束的牌局可偷看後續公共牌）
+  updateRabbitSection(hand);
+
   overlay.classList.remove('hidden');
+}
+
+// ── 兔子洞：偷看沒發完的公共牌 ──
+export function updateRabbitSection(hand) {
+  const el = document.getElementById('wo-rabbit');
+  if (!el) return;
+  const revealed = hand?.communityCards || [];
+  const all = hand?.allCommunity || [];
+  if (revealed.length >= 5 || all.length < 5) { el.innerHTML = ''; return; }
+  if (hand.rabbitRevealed) {
+    const rest = all.slice(revealed.length);
+    el.innerHTML = `<div class="wo-rabbit-cards">
+      <span class="rabbit-label">🐰 沒發完的牌</span>
+      ${rest.map(c => cardHTML(c, 'sm')).join('')}
+    </div>`;
+  } else {
+    el.innerHTML = `<button id="btn-rabbit" class="btn-rabbit">🐰 兔子洞：偷看沒發完的牌</button>`;
+  }
+}
+
+// ── 行動計時 UI（由 app.js 計時迴圈每 250ms 呼叫）──
+export function updateTimerUI(t) {
+  const label = document.getElementById('timer-countdown');
+  const fill  = document.querySelector('.player-seat.acting .seat-timer-fill');
+  if (!t) {
+    if (label && label.textContent) { label.textContent = ''; label.className = 'timer-label'; }
+    return;
+  }
+  const inBank = t.baseLeft <= 0;
+  const left = Math.max(0, Math.ceil(inBank ? t.bankLeft : t.baseLeft));
+  if (label) {
+    label.textContent = inBank ? `🏦 時間銀行 ${left}s` : `⏱ ${left}s`;
+    label.className = 'timer-label' + (inBank ? ' bank' : (left <= 5 ? ' urgent' : ''));
+  }
+  if (fill) {
+    const pct = inBank ? t.bankLeft / Math.max(t.bank, 1) : t.baseLeft / t.baseTotal;
+    fill.style.width = (Math.max(0, Math.min(1, pct)) * 100) + '%';
+    fill.classList.toggle('bank', inBank);
+    fill.classList.toggle('urgent', !inBank && t.baseLeft <= 5);
+  }
 }
 
 // ── 發牌動畫（從桌面中央飛往各座位）──

@@ -7,11 +7,16 @@ import {
   showPhase, showToast, renderWaiting,
   renderPlayerList, renderPot, renderActionPanel, renderHistory,
   showFireworks, showLoserText, renderCards,
-  showWinnerOverlay, animateDealCards
-} from './ui.js?v=10';
+  showWinnerOverlay, animateDealCards,
+  updateRabbitSection, updateTimerUI
+} from './ui.js?v=11';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
+
+// ── 常數（Natural8 風格計時規則）─────────────────────────
+const ACTION_SECONDS = 15;      // 每次行動基本秒數
+const TIME_BANK_SECONDS = 30;   // 每人時間銀行儲備秒數
 
 // ── 本地狀態 ──────────────────────────────────────────────
 let myRoomCode = null;
@@ -24,6 +29,9 @@ let showdownAnimated = false;
 let autoStartTimer = null;
 let lastHandNumber = null;
 let autoAdvancing = false;
+let timerInterval = null;
+let timeoutHandling = false;
+let rabbitSeen = false;
 
 // ── 初始化 ────────────────────────────────────────────────
 export function init() {
@@ -39,6 +47,9 @@ export function init() {
   }
 
   bindEvents();
+
+  // 行動計時迴圈（tick 內部自行判斷是否需要倒數）
+  timerInterval = setInterval(timerTick, 250);
 }
 
 function bindEvents() {
@@ -139,10 +150,22 @@ function bindEvents() {
     if (btn) handleRebuy(+btn.dataset.playerIndex);
   });
 
-  // 結算 overlay 補充籌碼 & 攤牌舊畫面（保留相容）
+  // 結算 overlay：補充籌碼 & 兔子洞
   document.getElementById('winner-overlay')?.addEventListener('click', e => {
     const btn = e.target.closest('.btn-rebuy');
     if (btn) handleRebuy(+btn.dataset.playerIndex);
+    if (e.target.closest('#btn-rabbit')) revealRabbit();
+  });
+
+  // 暫離 / 回座
+  document.getElementById('btn-sitout').addEventListener('click', async () => {
+    if (!myRoomCode || myPlayerIndex === null) return;
+    const me = currentRoom?.players?.[myPlayerIndex];
+    const newVal = !(me?.sitOut === true);
+    try {
+      await dbUpdate(roomRef(myRoomCode), { [`players/${myPlayerIndex}/sitOut`]: newVal });
+      showToast(newVal ? '已暫離，下一局起自動跳過' : '已回座，下一局加入', 'info');
+    } catch (e) { console.warn('sitout error:', e); }
   });
   document.getElementById('showdown-chips').addEventListener('click', e => {
     const btn = e.target.closest('.btn-rebuy');
@@ -208,7 +231,7 @@ async function doJoinRoom() {
         if (p?.isActive === false) { slot = +key; break; }
       }
       assignedIdx = slot;
-      players[slot] = { name, chips: startingChips, isActive: true, ...(pendingJoinAvatar ? { avatar: pendingJoinAvatar } : {}) };
+      players[slot] = { name, chips: startingChips, isActive: true, timeBank: TIME_BANK_SECONDS, ...(pendingJoinAvatar ? { avatar: pendingJoinAvatar } : {}) };
       return players;
     });
 
@@ -246,7 +269,7 @@ async function onCreateRoom() {
     createdAt: Date.now(),
     config: { playerCount, startingChips, smallBlind, bigBlind, bbAnte },
     players: {
-      0: { name: hostName, chips: startingChips, isActive: true, ...(pendingHostAvatar ? { avatar: pendingHostAvatar } : {}) }
+      0: { name: hostName, chips: startingChips, isActive: true, timeBank: TIME_BANK_SECONDS, ...(pendingHostAvatar ? { avatar: pendingHostAvatar } : {}) }
     }
   };
 
@@ -297,6 +320,15 @@ function renderRoom(room) {
   const codeBadge = document.getElementById('room-code-badge');
   if (codeBadge) codeBadge.textContent = room.code || myRoomCode || '';
 
+  // 暫離按鈕狀態
+  const sitBtn = document.getElementById('btn-sitout');
+  if (sitBtn) {
+    const sitting = players[myPlayerIndex]?.sitOut === true;
+    sitBtn.textContent = sitting ? '▶' : '⏸';
+    sitBtn.title = sitting ? '回座（下一局加入）' : '暫離（下一局起自動跳過）';
+    sitBtn.classList.toggle('sitting', sitting);
+  }
+
   const hand = room.hand;
   switch (room.status) {
     case 'waiting':
@@ -314,16 +346,27 @@ function renderRoom(room) {
         renderCards(hand, myPlayerIndex);
         renderHistory(room);
         showPhase('hand');
+        updateRabbitSection(hand);
         if (!showdownAnimated) {
           showdownAnimated = true;
           triggerShowdownAnimations(room, hand);
           showWinnerOverlay(room, hand);
-          // 4 秒後自動發牌開始下一局
+          // 自動發牌開始下一局（棄牌提前結束時多留時間給兔子洞）
+          const delay = (hand.communityCards?.length || 0) < 5 ? 6500 : 4500;
           clearTimeout(autoStartTimer);
           autoStartTimer = setTimeout(async () => {
             document.getElementById('winner-overlay')?.classList.add('hidden');
             await autoStartNextHand(hand.number);
-          }, 4000);
+          }, delay);
+        }
+        // 有人開了兔子洞 → 延後自動開局，讓大家看牌
+        if (hand.rabbitRevealed && !rabbitSeen) {
+          rabbitSeen = true;
+          clearTimeout(autoStartTimer);
+          autoStartTimer = setTimeout(async () => {
+            document.getElementById('winner-overlay')?.classList.add('hidden');
+            await autoStartNextHand(hand.number);
+          }, 5000);
         }
       } else {
         // 隱藏結算 overlay，清除自動開局計時
@@ -400,7 +443,7 @@ function showGameControls() {
 // ── 開始遊戲 ──────────────────────────────────────────────
 async function onStartGame() {
   const room = await dbGet(roomRef(myRoomCode));
-  const joined = Object.keys(room.players || {}).length;
+  const joined = Object.values(room.players || {}).filter(p => p?.isActive !== false && !p?.sitOut).length;
   if (joined < 2) { showToast('至少需要 2 位玩家', 'error'); return; }
 
   await dbUpdate(roomRef(myRoomCode), { status: 'playing' });
@@ -410,6 +453,8 @@ async function onStartGame() {
 async function startHand() {
   showdownAnimated = false;
   autoAdvancing = false;
+  timeoutHandling = false;
+  rabbitSeen = false;
   clearTimeout(autoStartTimer);
   autoStartTimer = null;
   const room = await dbGet(roomRef(myRoomCode));
@@ -418,8 +463,8 @@ async function startHand() {
   const prevHand = room.hand;
   const handNumber = (prevHand?.number || 0) + 1;
 
-  const activePlayers = players.filter(p => p.chips > 0 && p.isActive !== false);
-  if (activePlayers.length < 2) { showToast('籌碼不足或玩家不足，請先補充籌碼', 'info'); return; }
+  const activePlayers = players.filter(p => p.chips > 0 && p.isActive !== false && !p.sitOut);
+  if (activePlayers.length < 2) { showToast('籌碼不足或玩家不足，請先補充籌碼或回座', 'info'); return; }
 
   // 莊家輪換
   let dealerIdx = prevHand?.dealerIndex ?? 0;
@@ -433,10 +478,10 @@ async function startHand() {
   const sb = config.smallBlind;
   const bb = config.bigBlind;
 
-  // 建立座位（已離開或無籌碼的玩家直接標為棄牌）
+  // 建立座位（已離開、暫離或無籌碼的玩家直接標為棄牌）
   const seats = {};
   players.forEach((p, i) => {
-    const canPlay = p.chips > 0 && p.isActive !== false;
+    const canPlay = p.chips > 0 && p.isActive !== false && !p.sitOut;
     seats[i] = { bet: 0, totalBetInHand: 0, status: canPlay ? 'active' : 'folded', hasActed: false };
   });
 
@@ -472,7 +517,7 @@ async function startHand() {
   // 發牌
   const deck = shuffleDeck();
   let deckIdx = 0;
-  const activeIndices = players.map((_, i) => i).filter(i => players[i].chips > 0 && players[i].isActive !== false);
+  const activeIndices = players.map((_, i) => i).filter(i => players[i].chips > 0 && players[i].isActive !== false && !players[i].sitOut);
   const holeCards = {};
   activeIndices.forEach(i => {
     holeCards[i] = [deck[deckIdx++], deck[deckIdx++]];
@@ -488,6 +533,7 @@ async function startHand() {
     currentBet,
     lastRaiseSize: bb,
     actionIndex: firstActIdx,
+    actionStart: Date.now(),
     bigBlind: bb,
     seats,
     holeCards,
@@ -513,6 +559,16 @@ async function handleAction(type, raiseAmount) {
   const callAmount = hand.currentBet - seat.bet;
 
   let updates = {};
+
+  // 超過基本秒數的部分從時間銀行扣除
+  if (hand.actionStart) {
+    const elapsed = (Date.now() - hand.actionStart) / 1000;
+    if (elapsed > ACTION_SECONDS) {
+      const used = Math.ceil(elapsed - ACTION_SECONDS);
+      const bank = players[myPlayerIndex].timeBank ?? TIME_BANK_SECONDS;
+      updates[`players/${myPlayerIndex}/timeBank`] = Math.max(0, bank - used);
+    }
+  }
 
   if (type === 'fold') {
     updates[`hand/seats/${myPlayerIndex}/status`] = 'folded';
@@ -597,7 +653,7 @@ async function advanceTurn() {
     return;
   }
 
-  await dbUpdate(handRef(myRoomCode), { actionIndex: next });
+  await dbUpdate(handRef(myRoomCode), { actionIndex: next, actionStart: Date.now() });
 }
 
 function isRoundComplete(hand) {
@@ -652,6 +708,7 @@ async function advanceRound(room) {
   const firstAct = nextActionIdx(hand.dealerIndex, hand.seats, players.length);
   if (firstAct === null) { await goToShowdown(); return; }
   updates['hand/actionIndex'] = firstAct;
+  updates['hand/actionStart'] = Date.now();
 
   // 揭露公共牌
   const allCom = hand.allCommunity || [];
@@ -735,7 +792,8 @@ async function goToShowdown() {
   });
   updates['hand/awards']       = awards;
   updates['hand/round']        = 'showdown';
-  updates['hand/communityCards'] = communityCards;
+  // 只有 2 人以上攤牌才翻開整副公共牌；棄牌獲勝保留現狀（可用兔子洞偷看）
+  updates['hand/communityCards'] = notFolded.length >= 2 ? communityCards : (hand.communityCards || []);
   updates['hand/autoAwarded']  = true;
 
   if (Object.keys(evaluations).length) {
@@ -805,6 +863,80 @@ async function autoStartNextHand(expectedHandNum) {
   }
 }
 
+// ── 行動計時器（Natural8 風格：15 秒 + 時間銀行）──────────
+function timerTick() {
+  const room = currentRoom;
+  const hand = room?.hand;
+  if (!room || room.status !== 'playing' || !hand || hand.round === 'showdown'
+      || hand.autoAwarded || !hand.actionStart) { updateTimerUI(null); return; }
+  const idx = hand.actionIndex;
+  const seat = hand.seats?.[idx];
+  if (!seat || seat.status !== 'active') { updateTimerUI(null); return; }
+
+  const players = Object.values(room.players || {});
+  const bank = players[idx]?.timeBank ?? TIME_BANK_SECONDS;
+  const elapsed = (Date.now() - hand.actionStart) / 1000;
+
+  updateTimerUI({
+    baseLeft:  ACTION_SECONDS - elapsed,
+    bankLeft:  ACTION_SECONDS + bank - elapsed,
+    bank,
+    baseTotal: ACTION_SECONDS,
+  });
+
+  // 基本時間 + 時間銀行皆用完 → 強制行動
+  if (ACTION_SECONDS + bank - elapsed <= 0 && !timeoutHandling) {
+    timeoutHandling = true;
+    // 行動者自己的裝置立即執行；其他裝置延遲後代打（避免競態）
+    const grace = idx === myPlayerIndex ? 0 : 1500 + (myPlayerIndex || 0) * 400;
+    const hn = hand.number, as = hand.actionStart;
+    setTimeout(async () => {
+      try { await forceTimeoutAction(idx, hn, as); }
+      catch (e) { console.warn('超時處理錯誤:', e); }
+      finally { timeoutHandling = false; }
+    }, grace);
+  }
+}
+
+async function forceTimeoutAction(idx, expectedHandNumber, expectedActionStart) {
+  if (!myRoomCode) return;
+  const room = await dbGet(roomRef(myRoomCode));
+  const hand = room?.hand;
+  // 驗證狀態未變（沒有新局、沒人已代打、玩家沒有及時行動）
+  if (!hand || hand.round === 'showdown' || hand.autoAwarded) return;
+  if (hand.number !== expectedHandNumber) return;
+  if (hand.actionIndex !== idx) return;
+  if (hand.actionStart !== expectedActionStart) return;
+  const seat = hand.seats?.[idx];
+  if (!seat || seat.status !== 'active' || seat.hasActed) return;
+
+  const players = Object.values(room.players || {});
+  const bank = players[idx]?.timeBank ?? TIME_BANK_SECONDS;
+  const elapsed = (Date.now() - hand.actionStart) / 1000;
+  if (elapsed < ACTION_SECONDS + bank) return;
+
+  // 可過牌就過牌，否則棄牌；並自動標記暫離（N8 規則）
+  const callAmount = (hand.currentBet || 0) - (seat.bet || 0);
+  const updates = {
+    [`players/${idx}/timeBank`]: 0,
+    [`players/${idx}/sitOut`]: true,
+    [`hand/seats/${idx}/hasActed`]: true,
+  };
+  if (callAmount > 0) updates[`hand/seats/${idx}/status`] = 'folded';
+  await dbUpdate(roomRef(myRoomCode), updates);
+
+  const name = players[idx]?.name || `玩家${idx + 1}`;
+  showToast(`⏰ ${name} 超時，自動${callAmount > 0 ? '棄牌' : '過牌'}並暫離`, 'info');
+  await advanceTurn();
+}
+
+// ── 兔子洞：同步給全桌看沒發完的牌 ────────────────────────
+async function revealRabbit() {
+  if (!myRoomCode) return;
+  try { await dbUpdate(handRef(myRoomCode), { rabbitRevealed: true }); }
+  catch (e) { console.warn('rabbit error:', e); }
+}
+
 // ── 補充籌碼 ──────────────────────────────────────────────
 async function handleRebuy(playerIndex) {
   const room = await dbGet(roomRef(myRoomCode));
@@ -829,6 +961,8 @@ function onLeaveRoom() {
   clearTimeout(autoStartTimer);
   autoStartTimer = null;
   autoAdvancing = false;
+  timeoutHandling = false;
+  rabbitSeen = false;
   clearLocal();
   myRoomCode    = null;
   myPlayerIndex = null;
@@ -869,7 +1003,7 @@ function nextActiveIdx(from, players) {
   const n = players.length;
   let i = (from + 1) % n;
   for (let loop = 0; loop < n; loop++) {
-    if (players[i]?.chips > 0 && players[i]?.isActive !== false) return i;
+    if (players[i]?.chips > 0 && players[i]?.isActive !== false && !players[i]?.sitOut) return i;
     i = (i + 1) % n;
   }
   return from;

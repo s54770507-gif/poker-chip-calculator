@@ -122,6 +122,7 @@
       <div class="bar-left-icons">
         <button id="btn-leave-hand"         class="icon-btn" title="離開房間">✕</button>
         <button id="btn-show-history-hand"  class="icon-btn btn-history" title="查看歷史紀錄" style="display:none">≡</button>
+        <button id="btn-sitout"             class="icon-btn" title="暫離">⏸</button>
       </div>
       <span id="my-player-name">─</span>
       <div class="bar-right">
@@ -146,6 +147,7 @@
     <div id="action-area">
       <div id="actor-label" class="actor-label">
         <div id="actor-name"></div>
+        <span id="timer-countdown" class="timer-label"></span>
       </div>
 
       <div id="my-hole-cards" class="my-hole-cards" style="display:none">
@@ -243,6 +245,7 @@
   <div class="winner-overlay-inner">
     <div id="winner-overlay-header"></div>
     <div id="winner-overlay-hands"></div>
+    <div id="wo-rabbit"></div>
     <div id="winner-overlay-chips"></div>
   </div>
 </div>
@@ -272,6 +275,6 @@
 
 <div id="toast"></div>
 
-<script type="module" src="js/app.js?v=10"></script>
+<script type="module" src="js/app.js?v=11"></script>
 </body>
 </html>
