@@ -11,7 +11,7 @@ import {
   showWinnerOverlay, animateDealCards,
   updateRabbitSection, updateTimerUI,
   updateShowBluffSection, showChatBubble, playReaction, renderChatLog
-} from './ui.js?v=12';
+} from './ui.js?v=13';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
@@ -935,6 +935,38 @@ async function goToShowdown() {
   Object.entries(chipUpdates).forEach(([i, chips]) => {
     updates[`players/${i}/chips`] = chips;
   });
+
+  // 累積玩家數據（嘲諷稱號 / 戰報用）
+  const prevStats = room.stats || {};
+  const winnersSet = new Set();
+  Object.values(awards).forEach(w => (Array.isArray(w) ? w : [w]).forEach(x => winnersSet.add(x)));
+  players.forEach((p, i) => {
+    if (!hand.holeCards?.[i]) return; // 本局沒拿牌 = 沒參與
+    const s = seats[i] || {};
+    const st = {
+      handsPlayed: 0, handsWon: 0, chipsIn: 0, chipsOut: 0,
+      allins: 0, allinWins: 0, folds: 0, winStreak: 0, loseStreak: 0, biggestPot: 0,
+      ...(prevStats[i] || {})
+    };
+    st.handsPlayed++;
+    st.chipsIn += s.totalBetInHand || 0;
+    const won = (chipUpdates[i] || 0) - p.chips;
+    if (won > 0) st.chipsOut += won;
+    if (s.status === 'allin')  st.allins++;
+    if (s.status === 'folded') st.folds++;
+    if (winnersSet.has(i)) {
+      st.handsWon++;
+      st.winStreak++;
+      st.loseStreak = 0;
+      if (s.status === 'allin') st.allinWins++;
+      if (won > st.biggestPot) st.biggestPot = won;
+    } else {
+      st.loseStreak++;
+      st.winStreak = 0;
+    }
+    updates[`stats/${i}`] = st;
+  });
+
   updates['hand/awards']       = awards;
   updates['hand/round']        = 'showdown';
   // 只有 2 人以上攤牌才翻開整副公共牌；棄牌獲勝保留現狀（可用兔子洞偷看）

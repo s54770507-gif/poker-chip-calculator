@@ -47,6 +47,7 @@ export function renderPlayerList(room, hand, myIndex) {
   const handSeats = hand?.seats || [];
   const n = totalSlots;                       // 以總位數排列座位
   const dealerIdx = hand?.dealerIndex ?? 0;
+  const titles = computeTitles(room);
 
   // 渲染所有座位（包含空位）
   for (let i = 0; i < totalSlots; i++) {
@@ -129,7 +130,8 @@ export function renderPlayerList(room, hand, myIndex) {
       isBB ? '<span class="badge badge-bb">BB</span>' : '',
       hand?.straddleIndex === i ? '<span class="badge badge-st">ST</span>' : '',
       status === 'allin' ? '<span class="badge badge-allin">全下</span>' : '',
-    ].join('');
+    ].join('') + (titles[i] || []).map(t =>
+      `<span class="badge badge-title" title="${t.label}">${t.emoji}</span>`).join('');
 
     const betHtml = hs.bet > 0
       ? `<div class="seat-bet-chip">+${hs.bet.toLocaleString()}</div>`
@@ -283,6 +285,77 @@ function buildPotChips(amount) {
   return tokens.join('');
 }
 
+// ── 稱號系統（依累積數據即時頒發）──
+export function computeTitles(room) {
+  const stats = room?.stats || {};
+  const players = Object.values(room?.players || {});
+  const titles = {};
+  let fish = null, rich = null, rock = null, god = null;
+
+  players.forEach((p, i) => {
+    const st = stats[i];
+    if (!st || p?.isActive === false) return;
+    if (st.handsPlayed >= 3) {
+      const net = (st.chipsOut || 0) - (st.chipsIn || 0);
+      if (net < 0 && (!fish || net < fish.v)) fish = { i, v: net };
+      if (net > 0 && (!rich || net > rich.v)) rich = { i, v: net };
+      const fr = (st.folds || 0) / st.handsPlayed;
+      if (fr >= 0.6 && (!rock || fr > rock.v)) rock = { i, v: fr };
+    }
+    if ((st.allinWins || 0) >= 2 && (!god || st.allinWins > god.v)) god = { i, v: st.allinWins };
+  });
+
+  const add = (t, emoji, label) => { if (t) (titles[t.i] ||= []).push({ emoji, label }); };
+  add(fish, '🐟', '本日魚王');
+  add(rich, '💰', '大贏家');
+  add(rock, '🗿', '石頭人');
+  add(god,  '🎰', '賭神');
+  return titles;
+}
+
+// ── 系統補刀播報（依牌局結果與數據生成嘲諷字幕）──
+function buildRoasts(room, hand) {
+  const lines = [];
+  const players = Object.values(room?.players || {});
+  const stats = room?.stats || {};
+  const seats = hand?.seats || {};
+  const awards = hand?.awards || {};
+  const bb = room?.config?.bigBlind || 50;
+
+  const winners = new Set();
+  Object.values(awards).forEach(w => (Array.isArray(w) ? w : [w]).forEach(x => winners.add(x)));
+  const winnerNames = [...winners].map(i => players[i]?.name || `玩家${i + 1}`).join('、');
+
+  const notFolded = Object.values(seats).filter(s => s.status !== 'folded');
+  if (notFolded.length === 1 && Object.keys(seats).length > 1) {
+    lines.push(`😤 全場被 ${winnerNames} 嚇到集體棄牌`);
+  }
+
+  if ((hand?.pot || 0) >= bb * 40) {
+    lines.push(`💰 史詩級底池 ${hand.pot.toLocaleString()}，有人今晚要睡沙發了`);
+  }
+
+  players.forEach((p, i) => {
+    if (p?.isActive === false) return;
+    const st = stats[i] || {};
+    if ((st.loseStreak || 0) >= 3) {
+      lines.push(`💸 ${p.name} 已連輸 ${st.loseStreak} 局，正在為全桌發工資`);
+    }
+    if ((st.winStreak || 0) >= 3 && winners.has(i)) {
+      lines.push(`🔥 ${p.name} 三連勝起跳，記得請雞排`);
+    }
+  });
+
+  // 全下獲勝
+  [...winners].forEach(i => {
+    if (seats[i]?.status === 'allin') {
+      lines.push(`🎰 ${players[i]?.name || ''} 梭哈成功，賭神附體`);
+    }
+  });
+
+  return lines.slice(0, 3);
+}
+
 // ── 贏家 Overlay ──
 export function showWinnerOverlay(room, hand) {
   const overlay = document.getElementById('winner-overlay');
@@ -312,6 +385,12 @@ export function showWinnerOverlay(room, hand) {
       (mainHandName ? `<br><small style="font-size:13px;color:#ccc">${mainHandName}</small>` : '');
   }
 
+  // 系統補刀播報
+  const roastsEl = document.getElementById('wo-roasts');
+  if (roastsEl) {
+    roastsEl.innerHTML = buildRoasts(room, hand).map(l => `<div class="roast-line">${l}</div>`).join('');
+  }
+
   // 玩家手牌揭示
   const handsEl = document.getElementById('winner-overlay-hands');
   if (handsEl) {
@@ -334,15 +413,21 @@ export function showWinnerOverlay(room, hand) {
     }).join('');
   }
 
-  // 籌碼彙總（僅顯示仍在房間的玩家）
+  // 籌碼彙總（僅顯示仍在房間的玩家，含稱號與戰績）
   const chipsEl = document.getElementById('winner-overlay-chips');
   if (chipsEl) {
     const activePlayers = players.map((p, i) => ({ p, i })).filter(({ p }) => p?.isActive !== false);
+    const titles = computeTitles(room);
+    const stats = room.stats || {};
     chipsEl.innerHTML = `<div class="wo-chips-section">
       <div class="wo-chips-title">目前籌碼</div>
-      ${activePlayers.map(({ p, i }) => `
+      ${activePlayers.map(({ p, i }) => {
+        const st = stats[i] || {};
+        const titleHtml = (titles[i] || []).map(t => `<span class="title-chip">${t.emoji} ${t.label}</span>`).join('');
+        const recHtml = st.handsPlayed ? `<span class="wo-stat">勝 ${st.handsWon || 0}/${st.handsPlayed}</span>` : '';
+        return `
         <div class="wo-chip-row">
-          <span>${p.name}</span>
+          <span>${p.name} ${titleHtml}${recHtml}</span>
           <span class="wo-chip-val">
             ${p.chips > 0 ? p.chips.toLocaleString() : '<span style="color:#888">爆牌</span>'}
             ${p.chips <= 0
@@ -350,7 +435,8 @@ export function showWinnerOverlay(room, hand) {
                    style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--gold);border:none;border-radius:5px;color:#000;cursor:pointer;font-weight:700">補充</button>`
               : ''}
           </span>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
     </div>`;
   }
 
