@@ -141,7 +141,7 @@ export function renderPlayerList(room, hand, myIndex) {
     const holeCards = hand?.holeCards || {};
     let seatCardsHtml = '';
     if (hand && status !== 'folded' && holeCards[i] !== undefined) {
-      if (isMe) {
+      if (isMe || hand.revealAll) {   // 全下開牌時亮出所有人手牌
         const [c1, c2] = holeCards[i];
         seatCardsHtml = `<div class="seat-cards">${cardHTML(c1,'xs')}${cardHTML(c2,'xs')}</div>`;
       } else {
@@ -149,7 +149,9 @@ export function renderPlayerList(room, hand, myIndex) {
       }
     }
 
-    const rebuyHtml = (p.chips <= 0)
+    // 補碼按鈕：對局進行中（如全下 0 籌碼）不顯示，等結算或未參與時才出現
+    const canRebuy = p.chips <= 0 && (!hand || hand.round === 'showdown' || status === 'folded');
+    const rebuyHtml = canRebuy
       ? `<button class="seat-rebuy-btn" data-player-index="${i}">補充籌碼</button>` : '';
 
     // 行動計時條（輪到此玩家時顯示，寬度由計時迴圈更新）
@@ -207,11 +209,15 @@ export function renderPot(hand) {
 
 // 公共牌 + 我的手牌
 export function renderCards(hand, myIndex) {
-  // 公共牌
+  // 公共牌（只讓新翻開的牌播進場動畫）
   const comEl = document.getElementById('community-cards');
   if (comEl) {
     const cards = hand?.communityCards || [];
-    comEl.innerHTML = cards.map(c => `<div class="card-enter">${cardHTML(c, 'sm')}</div>`).join('');
+    let prev = +comEl.dataset.count || 0;
+    if (cards.length < prev) prev = 0; // 新的一局重置
+    comEl.innerHTML = cards.map((c, i) =>
+      `<div class="${i >= prev ? 'card-enter' : ''}">${cardHTML(c, 'sm')}</div>`).join('');
+    comEl.dataset.count = cards.length;
   }
 
   // 我的手牌
@@ -657,27 +663,46 @@ export function animateDealCards(hand, myIndex, totalSlots) {
   }, totalMs);
 }
 
-// 行動面板
+// 行動面板（N8 風格下注尺寸）
 export function renderActionPanel(room, hand, myIndex) {
   const players = Object.values(room.players || {});
   const seats = hand?.seats || [];
   const mySeat = seats[myIndex] || {};
   const isMyTurn = hand?.actionIndex === myIndex && mySeat.status === 'active';
 
+  const panel = document.getElementById('action-buttons');
+  const raisePanel = document.getElementById('raise-panel');
+
+  // 全下開牌中：隱藏所有行動 UI
+  if (hand?.runout) {
+    document.getElementById('actor-name').textContent = '開牌中...';
+    document.getElementById('actor-label').className = 'actor-label';
+    panel.style.display = 'none';
+    raisePanel.classList.add('hidden');
+    document.getElementById('waiting-msg').style.display = 'none';
+    return;
+  }
+
   const actorName = players[hand?.actionIndex]?.name || '';
   document.getElementById('actor-name').textContent = isMyTurn ? '你的回合' : `等待 ${actorName}...`;
   document.getElementById('actor-label').className = isMyTurn ? 'actor-label my-turn' : 'actor-label';
 
-  const panel = document.getElementById('action-buttons');
   panel.style.display = isMyTurn ? 'grid' : 'none';
   document.getElementById('waiting-msg').style.display = isMyTurn ? 'none' : 'block';
 
-  if (!isMyTurn) return;
+  // 沒輪到我：收合加注面板，避免殘留上一輪的尺寸
+  if (!isMyTurn) { raisePanel.classList.add('hidden'); return; }
 
-  const callAmount = (hand?.currentBet || 0) - (mySeat.bet || 0);
+  const currentBet = hand?.currentBet || 0;
+  const callAmount = currentBet - (mySeat.bet || 0);
   const myChips = players[myIndex]?.chips || 0;
+  const bb = hand?.bigBlind || room.config?.bigBlind || 0;
   const canCheck = callAmount === 0;
   const canCall = callAmount > 0 && myChips > 0;
+
+  // 底池 = 已收進的底池 + 桌上本輪所有下注
+  const totalPot = (hand?.pot || 0) +
+    Object.values(seats).reduce((s, x) => s + (x?.bet || 0), 0);
 
   const btnCheck = document.getElementById('btn-check');
   const btnCall = document.getElementById('btn-call');
@@ -686,8 +711,7 @@ export function renderActionPanel(room, hand, myIndex) {
   if (canCall) {
     const actualCall = Math.min(callAmount, myChips);
     const isAllinCall = actualCall >= myChips;
-    const pot = hand?.pot || 0;
-    const oddsRatio = actualCall > 0 ? ((pot + actualCall) / actualCall).toFixed(1) : '–';
+    const oddsRatio = actualCall > 0 ? ((totalPot + actualCall) / actualCall).toFixed(1) : '–';
     const oddsLabel = `<span class="pot-odds">賠率 ${oddsRatio}:1</span>`;
     if (isAllinCall) {
       btnCall.className = 'action-btn allin-call';
@@ -696,33 +720,41 @@ export function renderActionPanel(room, hand, myIndex) {
       btnCall.className = 'action-btn';
       btnCall.innerHTML = `跟注 ${actualCall.toLocaleString()}${oddsLabel}`;
     }
-    btnCall.id = 'btn-call';
   }
 
-  // 加注尺寸預設按鈕
-  const pot = hand?.pot || 0;
-  const effectivePot = pot + callAmount;
-  const p33 = Math.max(Math.round(effectivePot * 0.33), hand?.bigBlind || 0);
-  const p50 = Math.max(Math.round(effectivePot * 0.50), hand?.bigBlind || 0);
-  const p100 = effectivePot;
-  const allin = myChips;
+  // 加注：跟注後還有籌碼才可加注
+  const myTotal = myChips + (mySeat.bet || 0);
+  const canRaise = myChips > callAmount && myTotal > currentBet;
+  const btnRaise = document.getElementById('btn-raise-toggle');
+  btnRaise.style.display = canRaise ? 'block' : 'none';
+  if (!canRaise) { raisePanel.classList.add('hidden'); return; }
 
-  const minRaise = (hand?.currentBet || 0) + (hand?.lastRaiseSize || hand?.bigBlind || 0);
+  // 加注尺寸（都是「加注到」的總額）
+  const minRaiseTo = currentBet > 0 ? currentBet + (hand?.lastRaiseSize || bb) : bb;
+  const potRaiseTo = currentBet + callAmount + totalPot; // 底池加注 = 跟注後再加一個底池
 
-  document.getElementById('raise-p33').dataset.amount  = Math.min(Math.max(p33 + (hand?.currentBet||0), minRaise), allin);
-  document.getElementById('raise-p50').dataset.amount  = Math.min(Math.max(p50 + (hand?.currentBet||0), minRaise), allin);
-  document.getElementById('raise-p100').dataset.amount = Math.min(Math.max(p100 + (hand?.currentBet||0), minRaise), allin);
-  document.getElementById('raise-allin').dataset.amount = myChips + (mySeat.bet||0);
+  const presets = currentBet === 0
+    ? [
+        { label: '1/3 底池', amt: Math.round(totalPot / 3) },
+        { label: '1/2 底池', amt: Math.round(totalPot / 2) },
+        { label: '底池',     amt: totalPot },
+        { label: '全下',     amt: myTotal, allin: true },
+      ]
+    : [
+        { label: '最小加注', amt: minRaiseTo },
+        { label: '3 倍',     amt: currentBet * 3 },
+        { label: '底池加注', amt: potRaiseTo },
+        { label: '全下',     amt: myTotal, allin: true },
+      ];
 
-  // 顯示計算後的金額
-  const toChipStr = amt => {
-    const net = amt - (mySeat.bet||0);
-    return net >= myChips ? `全下` : amt.toLocaleString();
-  };
-  document.getElementById('raise-p33').innerHTML  = `<span>1/3 底池</span><small>${toChipStr(+document.getElementById('raise-p33').dataset.amount)}</small>`;
-  document.getElementById('raise-p50').innerHTML  = `<span>1/2 底池</span><small>${toChipStr(+document.getElementById('raise-p50').dataset.amount)}</small>`;
-  document.getElementById('raise-p100').innerHTML = `<span>底池</span><small>${toChipStr(+document.getElementById('raise-p100').dataset.amount)}</small>`;
-  document.getElementById('raise-allin').innerHTML= `<span>全下</span><small>${allin.toLocaleString()}</small>`;
+  const ids = ['raise-p33', 'raise-p50', 'raise-p100', 'raise-allin'];
+  presets.forEach((p, k) => {
+    const amt = Math.min(Math.max(p.amt, Math.min(minRaiseTo, myTotal)), myTotal);
+    const btn = document.getElementById(ids[k]);
+    btn.dataset.amount = amt;
+    const hitAllin = amt >= myTotal;
+    btn.innerHTML = `<span>${p.label}</span><small>${hitAllin && !p.allin ? '全下' : amt.toLocaleString()}</small>`;
+  });
 }
 
 // 攤牌畫面（自動結算結果）

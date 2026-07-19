@@ -11,7 +11,7 @@ import {
   showWinnerOverlay, animateDealCards,
   updateRabbitSection, updateTimerUI,
   updateShowBluffSection, showChatBubble, playReaction, renderChatLog
-} from './ui.js?v=13';
+} from './ui.js?v=14';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
@@ -463,6 +463,11 @@ function renderRoom(room) {
         renderCards(hand, myPlayerIndex);
         renderHistory(room);
         showPhase('hand');
+        // 收合所有行動 UI（下注尺寸等新手牌發出、輪到自己才出現）
+        document.getElementById('action-buttons').style.display = 'none';
+        document.getElementById('raise-panel').classList.add('hidden');
+        document.getElementById('actor-label').style.display = 'none';
+        document.getElementById('waiting-msg').style.display = 'none';
         updateRabbitSection(hand);
         updateShowBluffSection(hand, myPlayerIndex, players);
         if (!showdownAnimated) {
@@ -503,6 +508,18 @@ function renderRoom(room) {
           lastHandNumber = hand.number;
           const totalSlots = room.config?.playerCount || Object.keys(room.players || {}).length;
           setTimeout(() => animateDealCards(hand, myPlayerIndex, totalSlots), 80);
+        }
+        // 開牌中：不做卡住偵測；但若驅動端斷線超過 15 秒，任一端接手結算
+        if (hand.runout) {
+          if (Date.now() - hand.runout > 15000 && !hand.autoAwarded && !autoAdvancing) {
+            autoAdvancing = true;
+            setTimeout(async () => {
+              try { await goToShowdown(); }
+              catch (e) { console.warn('runout rescue error:', e); }
+              finally { autoAdvancing = false; }
+            }, 300 + (myPlayerIndex || 0) * 80);
+          }
+          break;
         }
         // 偵測行動者已離開或棄牌導致遊戲卡住
         if (!autoAdvancing && !hand.autoAwarded) {
@@ -772,6 +789,7 @@ async function handleAction(type, raiseAmount) {
 async function advanceTurn() {
   const room = await dbGet(roomRef(myRoomCode));
   const hand = room.hand;
+  if (!hand || hand.runout || hand.autoAwarded) return; // 開牌中/已結算不再推進
   const players = Object.values(room.players);
   const seats = Object.values(hand.seats);
 
@@ -861,15 +879,46 @@ async function advanceRound(room) {
   if (nextRound === 'turn')  updates['hand/communityCards'] = allCom.slice(0, 4);
   if (nextRound === 'river') updates['hand/communityCards'] = allCom.slice(0, 5);
 
-  // 若所有玩家都全下，跳到 showdown（先揭露所有公共牌）
-  const active = Object.values(seats).filter(s => s.status === 'active');
-  if (active.length === 0) {
-    await dbUpdate(roomRef(myRoomCode), { 'hand/communityCards': allCom.slice(0, 5) });
-    await goToShowdown();
+  // 全下 runout：無人能再行動時，逐街開牌（翻牌→轉牌→河牌）
+  const active   = Object.values(seats).filter(s => s.status === 'active');
+  const allins   = Object.values(seats).filter(s => s.status === 'allin');
+  const notFolded = Object.values(seats).filter(s => s.status !== 'folded');
+  if ((active.length === 0 || (active.length === 1 && allins.length >= 1)) && notFolded.length >= 2) {
+    await runOutBoard(room);
     return;
   }
 
   await dbUpdate(roomRef(myRoomCode), updates);
+}
+
+// ── 全下逐街開牌（N8 風格：亮手牌 → 翻牌 → 轉牌 → 河牌 → 結算）──
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+async function runOutBoard(room) {
+  const hand = room.hand;
+  const allCom = hand.allCommunity || [];
+  if (allCom.length < 5) { await goToShowdown(); return; }
+  const cur = (hand.communityCards || []).length;
+
+  // 用 transaction 搶佔 runout 主導權（避免多端同時逐街開牌）
+  let claimed = false;
+  await dbTransaction(handRef(myRoomCode), h => {
+    if (!h || h.runout || h.autoAwarded) return;
+    h.runout = Date.now();
+    h.revealAll = true;    // 亮出所有未棄牌玩家手牌
+    h.actionIndex = -1;
+    claimed = true;
+    return h;
+  });
+  if (!claimed) return;
+
+  for (const nCards of [3, 4, 5]) {
+    if (nCards <= cur) continue;
+    await sleep(nCards === 3 ? 900 : 1200);
+    await dbUpdate(handRef(myRoomCode), { communityCards: allCom.slice(0, nCards) });
+  }
+  await sleep(1200);
+  await goToShowdown();
 }
 
 async function goToShowdown() {
