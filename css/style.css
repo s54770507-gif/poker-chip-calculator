@@ -545,27 +545,91 @@ input:focus { border-color: var(--red); }
 #actor-label.my-turn { color: var(--gold); font-weight: 700; font-size: 15px; }
 #actor-name { font-size: 17px; font-weight: 700; text-align: center; min-height: 20px; }
 #waiting-msg { font-size: 14px; color: var(--text-dim); text-align: center; padding: 4px 0; }
+/* 行動按鈕：右下角一排（N8 風格紅色按鈕） */
 #action-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  justify-content: flex-end;
   gap: 8px;
 }
 .action-btn {
-  width: 100%;
-  min-height: 58px;
-  border: none;
-  border-radius: 12px;
-  font-size: 18px;
+  flex: 1 1 0;
+  max-width: 175px;
+  min-height: 56px;
+  border: 1px solid #c4514b;
+  border-radius: 10px;
+  font-size: 16px;
   font-weight: 700;
+  line-height: 1.25;
   cursor: pointer;
   color: var(--text);
+  background: linear-gradient(#a83432, #7e1f1d);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
   transition: opacity .15s, transform .1s;
 }
-.action-btn:active { transform: scale(0.96); opacity: 0.8; }
-#btn-fold         { background: var(--btn-fold); }
-#btn-check        { background: #1a3a1a; }
-#btn-call         { background: var(--btn-call); }
-#btn-raise-toggle { background: var(--btn-raise); }
+.action-btn:active { transform: scale(0.96); opacity: 0.85; }
+#btn-fold  { background: linear-gradient(#8a2725, #611514); }
+#btn-check { background: linear-gradient(#2c6b3a, #1c4a26); border-color: #47945c; }
+#btn-call  { background: linear-gradient(#2c6b3a, #1c4a26); border-color: #47945c; }
+#btn-raise .ab-amt { font-size: 14px; color: #ffe08a; }
+.action-btn .pot-odds { display: block; font-size: 11px; color: rgba(255,255,255,0.65); font-weight: 600; }
+
+/* 調注列：百分比快選 + 自訂金額 + 滑桿 */
+#raise-sizer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pct-btn {
+  background: #202020;
+  border: 1px solid #3a3a3a;
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pct-btn:active { color: var(--gold); border-color: var(--gold-dim); }
+#raise-amount-input {
+  width: 86px;
+  background: #141414;
+  border: 1px solid #333;
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: right;
+}
+#raise-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 0 1 160px;
+  min-width: 110px;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  outline: none;
+}
+#raise-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1a1a1a 34%, var(--gold) 36%);
+  border: 2px solid var(--gold);
+  cursor: pointer;
+}
+#raise-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1a1a1a 34%, var(--gold) 36%);
+  border: 2px solid var(--gold);
+  cursor: pointer;
+}
 
 /* 等待開始面板 */
 #pre-game-panel {
@@ -600,39 +664,6 @@ input:focus { border-color: var(--red); }
 }
 .player-seat.empty .seat-name { color: #444; }
 .player-seat.empty .seat-amount { color: #333; }
-
-/* 加注面板（N8 風格：直式列表，左標籤右金額） */
-#raise-panel { display: flex; flex-direction: column; gap: 6px; }
-#raise-panel.hidden { display: none; }
-#raise-presets { display: flex; flex-direction: column; gap: 6px; }
-.raise-preset {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  min-height: 44px;
-  padding: 8px 14px;
-  background: #1e1e1e;
-  border: 1px solid #3a3a3a;
-  border-radius: 10px;
-  color: var(--text);
-  cursor: pointer;
-  transition: background .15s, border-color .15s;
-}
-.raise-preset:active { border-color: var(--gold); background: #241c00; }
-.rp-label {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 5px;
-  padding: 2px 7px;
-}
-.rp-amt { font-size: 16px; font-weight: 700; color: var(--gold); }
-.custom-raise-row { display: flex; gap: 8px; }
-.custom-raise-row input { flex: 1; }
-.custom-raise-row button { width: auto; padding: 12px 16px; white-space: nowrap; }
-#raise-custom-input { font-size: 16px; }
 
 /* ─────────────── 攤牌 ─────────────── */
 #screen-showdown .scroll-area { display: flex; flex-direction: column; gap: 14px; }

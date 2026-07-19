@@ -672,14 +672,14 @@ export function renderActionPanel(room, hand, myIndex) {
   const isMyTurn = hand?.actionIndex === myIndex && mySeat.status === 'active';
 
   const panel = document.getElementById('action-buttons');
-  const raisePanel = document.getElementById('raise-panel');
+  const sizer = document.getElementById('raise-sizer');
 
   // 全下開牌中：隱藏所有行動 UI
   if (hand?.runout) {
     document.getElementById('actor-name').textContent = '開牌中...';
     document.getElementById('actor-label').className = 'actor-label';
     panel.style.display = 'none';
-    raisePanel.classList.add('hidden');
+    sizer.style.display = 'none';
     document.getElementById('waiting-msg').style.display = 'none';
     return;
   }
@@ -688,13 +688,13 @@ export function renderActionPanel(room, hand, myIndex) {
   document.getElementById('actor-name').textContent = isMyTurn ? '你的回合' : `等待 ${actorName}...`;
   document.getElementById('actor-label').className = isMyTurn ? 'actor-label my-turn' : 'actor-label';
 
-  panel.style.display = isMyTurn ? 'grid' : 'none';
+  panel.style.display = isMyTurn ? 'flex' : 'none';
   const wm = document.getElementById('waiting-msg');
   wm.style.display = isMyTurn ? 'none' : 'block';
   wm.textContent = '等待中...';
 
-  // 沒輪到我：收合加注面板，避免殘留上一輪的尺寸
-  if (!isMyTurn) { raisePanel.classList.add('hidden'); return; }
+  // 沒輪到我：收起調注列，避免殘留上一輪的尺寸
+  if (!isMyTurn) { sizer.style.display = 'none'; return; }
 
   const currentBet = hand?.currentBet || 0;
   const callAmount = currentBet - (mySeat.bet || 0);
@@ -728,58 +728,52 @@ export function renderActionPanel(room, hand, myIndex) {
   // 加注：跟注後還有籌碼才可加注
   const myTotal = myChips + (mySeat.bet || 0);
   const canRaise = myChips > callAmount && myTotal > currentBet;
-  const btnRaise = document.getElementById('btn-raise-toggle');
+  const btnRaise = document.getElementById('btn-raise');
   btnRaise.style.display = canRaise ? 'block' : 'none';
-  if (!canRaise) { raisePanel.classList.add('hidden'); return; }
+  sizer.style.display = canRaise ? 'flex' : 'none';
+  if (!canRaise) return;
 
-  // 加注尺寸（都是「加注到」的總額，N8 式階梯）
+  // 調注列參數（都是「加注到」的總額）
   const minRaiseTo = currentBet > 0 ? currentBet + (hand?.lastRaiseSize || bb) : bb;
-  const potRaiseTo = currentBet + callAmount + totalPot; // 底池加注 = 跟注後再加一個底池
+  const sb = room.config?.smallBlind || Math.max(1, Math.round(bb / 2));
+  sizer.dataset.min  = Math.min(minRaiseTo, myTotal);
+  sizer.dataset.max  = myTotal;
+  sizer.dataset.step = sb;
+  sizer.dataset.pot  = totalPot;
+  sizer.dataset.currentBet = currentBet;
+  sizer.dataset.call = callAmount;
+  sizer.dataset.betMode = currentBet === 0 ? '1' : '';
 
-  let ladder;
-  if (currentBet === 0) {
-    // 翻牌後無人下注
-    ladder = [
-      { label: '1/3 底池', amt: Math.round(totalPot / 3) },
-      { label: '1/2 底池', amt: Math.round(totalPot / 2) },
-      { label: '2/3 底池', amt: Math.round(totalPot * 2 / 3) },
-      { label: '底池',     amt: totalPot },
-      { label: '全下',     amt: myTotal, allin: true },
-    ];
-  } else if (currentBet <= bb) {
-    // 翻牌前無人加注
-    ladder = [
-      { label: '2 大盲',   amt: bb * 2 },
-      { label: '3 大盲',   amt: bb * 3 },
-      { label: '4 大盲',   amt: bb * 4 },
-      { label: '底池',     amt: potRaiseTo },
-      { label: '全下',     amt: myTotal, allin: true },
-    ];
+  // 新的行動回合 → 重置為最小加注；同回合內保留玩家調好的值
+  const turnKey = `${hand?.number}:${hand?.actionStart || 0}`;
+  if (sizer.dataset.turnKey !== turnKey) {
+    sizer.dataset.turnKey = turnKey;
+    setRaiseAmount(+sizer.dataset.min);
   } else {
-    // 面對加注
-    ladder = [
-      { label: '最小加注', amt: minRaiseTo },
-      { label: '2.5 倍',   amt: Math.round(currentBet * 2.5) },
-      { label: '3 倍',     amt: currentBet * 3 },
-      { label: '底池',     amt: potRaiseTo },
-      { label: '全下',     amt: myTotal, allin: true },
-    ];
+    setRaiseAmount(+document.getElementById('raise-amount-input').value || +sizer.dataset.min);
   }
+}
 
-  // 夾限 + 去重（不同公式算出同額時只留一列）
-  const seen = new Set();
-  const rows = [];
-  ladder.forEach(p => {
-    const amt = Math.min(Math.max(p.amt, Math.min(minRaiseTo, myTotal)), myTotal);
-    if (seen.has(amt)) return;
-    seen.add(amt);
-    const hitAllin = amt >= myTotal;
-    rows.push(`<button class="raise-preset" data-amount="${amt}">
-      <span class="rp-label">${hitAllin ? '全下' : p.label}</span>
-      <span class="rp-amt">${amt.toLocaleString()}</span>
-    </button>`);
-  });
-  document.getElementById('raise-presets').innerHTML = rows.join('');
+// ── 調注：夾限 + 以小盲為刻度，同步滑桿 / 輸入框 / 加注按鈕 ──
+export function setRaiseAmount(amount) {
+  const sizer = document.getElementById('raise-sizer');
+  const min  = +sizer.dataset.min  || 0;
+  const max  = +sizer.dataset.max  || 0;
+  const step = +sizer.dataset.step || 1;
+
+  let amt = Math.round((+amount || 0) / step) * step;
+  amt = Math.max(min, Math.min(max, amt));
+
+  document.getElementById('raise-amount-input').value = amt;
+  const slider = document.getElementById('raise-slider');
+  slider.min = min;
+  slider.max = max;
+  slider.step = step;
+  slider.value = amt;
+
+  const btn = document.getElementById('btn-raise');
+  const label = amt >= max ? '全下' : (sizer.dataset.betMode === '1' ? '下注' : '加注至');
+  btn.innerHTML = `${label}<br><span class="ab-amt">${amt.toLocaleString()}</span>`;
 }
 
 // 攤牌畫面（自動結算結果）

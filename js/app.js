@@ -10,8 +10,9 @@ import {
   showFireworks, showLoserText, renderCards,
   showWinnerOverlay, animateDealCards,
   updateRabbitSection, updateTimerUI,
-  updateShowBluffSection, showChatBubble, playReaction, renderChatLog
-} from './ui.js?v=17';
+  updateShowBluffSection, showChatBubble, playReaction, renderChatLog,
+  setRaiseAmount
+} from './ui.js?v=18';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
@@ -137,21 +138,22 @@ function bindEvents() {
   document.getElementById('btn-fold').addEventListener('click', () => handleAction('fold'));
   document.getElementById('btn-check').addEventListener('click', () => handleAction('check'));
   document.getElementById('btn-call').addEventListener('click', () => handleAction('call'));
-  document.getElementById('btn-raise-toggle').addEventListener('click', toggleRaisePanel);
-  document.getElementById('btn-raise-cancel').addEventListener('click', toggleRaisePanel);
-
-  // 加注尺寸列（動態生成 → 用事件委派）
-  document.getElementById('raise-presets').addEventListener('click', e => {
-    const btn = e.target.closest('.raise-preset');
-    if (!btn) return;
-    const amount = +btn.dataset.amount;
-    if (amount > 0) handleAction('raise', amount);
-  });
-
-  document.getElementById('btn-raise-confirm').addEventListener('click', () => {
-    const val = +document.getElementById('raise-custom-input').value;
+  document.getElementById('btn-raise').addEventListener('click', () => {
+    const val = +document.getElementById('raise-amount-input').value;
     if (val > 0) handleAction('raise', val);
   });
+
+  // 調注：滑桿 / 自訂輸入 / 底池百分比快選
+  document.getElementById('raise-slider').addEventListener('input', e => setRaiseAmount(+e.target.value));
+  document.getElementById('raise-amount-input').addEventListener('change', e => setRaiseAmount(+e.target.value));
+  document.querySelectorAll('.pct-btn').forEach(btn => btn.addEventListener('click', () => {
+    const sizer = document.getElementById('raise-sizer');
+    const pct = +btn.dataset.pct;
+    // N% 底池加注 = 跟注後，再加上底池的 N%
+    const target = (+sizer.dataset.currentBet || 0) + (+sizer.dataset.call || 0) +
+                   Math.round((+sizer.dataset.pot || 0) * pct / 100);
+    setRaiseAmount(target);
+  }));
 
   // 座位點擊：補充籌碼 / 丟擲物品選單
   document.getElementById('player-seats').addEventListener('click', e => {
@@ -471,7 +473,7 @@ function renderRoom(room) {
         showPhase('hand');
         // 收合所有行動 UI（下注尺寸等新手牌發出、輪到自己才出現）
         document.getElementById('action-buttons').style.display = 'none';
-        document.getElementById('raise-panel').classList.add('hidden');
+        document.getElementById('raise-sizer').style.display = 'none';
         document.getElementById('actor-label').style.display = 'none';
         // 可開局人數不足時，明確告知在等什麼（回座 / 補碼後看門狗會自動開局）
         {
@@ -569,7 +571,7 @@ function renderPreGame(room, myIndex) {
   document.getElementById('action-buttons').style.display = 'none';
   document.getElementById('waiting-msg').style.display = 'none';
   document.getElementById('actor-label').style.display = 'none';
-  document.getElementById('raise-panel').classList.add('hidden');
+  document.getElementById('raise-sizer').style.display = 'none';
   document.getElementById('pre-game-panel').style.display = 'flex';
 
   document.getElementById('pregame-status').textContent = `${joined} / ${total} 玩家已就座`;
@@ -796,8 +798,6 @@ async function handleAction(type, raiseAmount) {
       }
     });
 
-    // 隱藏加注面板
-    document.getElementById('raise-panel').classList.add('hidden');
   }
 
   await dbUpdate(roomRef(myRoomCode), updates);
@@ -1278,10 +1278,6 @@ function onLeaveRoom() {
       console.warn('離開房間寫入錯誤:', e);
     }
   })();
-}
-
-function toggleRaisePanel() {
-  document.getElementById('raise-panel').classList.toggle('hidden');
 }
 
 // ── 工具函式 ──────────────────────────────────────────────
