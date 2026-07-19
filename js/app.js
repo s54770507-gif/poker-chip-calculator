@@ -1,8 +1,8 @@
 import {
   initFirebase, roomRef, playersRef, playerRef, handRef, historyRef,
-  chatRef, reactionsRef,
+  chatRef, reactionsRef, nextHandClaimRef, runoutClaimRef,
   dbSet, dbGet, dbUpdate, dbListen, dbTransaction, dbPush, serverTimestamp
-} from './firebase.js?v=12';
+} from './firebase.js?v=15';
 
 import {
   showPhase, showToast, renderWaiting,
@@ -37,6 +37,7 @@ let rabbitSeen = false;
 let seenChatKeys = new Set();
 let seenReactionKeys = new Set();
 let eventsPrimed = false;
+let nextHandRetrying = false;
 let lastInteractAt = 0;      // 互動冷卻（防洗版）
 let throwTargetIdx = null;   // 丟擲目標座位
 
@@ -503,9 +504,12 @@ function renderRoom(room) {
         renderActionPanel(room, hand, myPlayerIndex);
         document.getElementById('btn-show-history-hand').style.display = 'block';
         showPhase('hand');
-        // 偵測到新局時觸發發牌動畫
+        // 偵測到新局：所有端重置本地旗標（不只發牌的那一端）並觸發發牌動畫
         if (lastHandNumber !== hand.number) {
           lastHandNumber = hand.number;
+          showdownAnimated = false;
+          rabbitSeen = false;
+          nextHandRetrying = false;
           const totalSlots = room.config?.playerCount || Object.keys(room.players || {}).length;
           setTimeout(() => animateDealCards(hand, myPlayerIndex, totalSlots), 80);
         }
@@ -900,17 +904,14 @@ async function runOutBoard(room) {
   if (allCom.length < 5) { await goToShowdown(); return; }
   const cur = (hand.communityCards || []).length;
 
-  // 用 transaction 搶佔 runout 主導權（避免多端同時逐街開牌）
-  let claimed = false;
-  await dbTransaction(handRef(myRoomCode), h => {
-    if (!h || h.runout || h.autoAwarded) return;
-    h.runout = Date.now();
-    h.revealAll = true;    // 亮出所有未棄牌玩家手牌
-    h.actionIndex = -1;
-    claimed = true;
-    return h;
+  // 用小節點 transaction 搶佔 runout 主導權（避免多端同時逐街開牌）
+  const res = await dbTransaction(runoutClaimRef(myRoomCode), v => {
+    if (v) return;          // 已有人主導
+    return Date.now();
   });
-  if (!claimed) return;
+  if (!res?.committed) return;
+  // 亮出所有未棄牌玩家手牌、隱藏行動 UI
+  await dbUpdate(handRef(myRoomCode), { runout: Date.now(), revealAll: true, actionIndex: -1 });
 
   for (const nCards of [3, 4, 5]) {
     if (nCards <= cur) continue;
@@ -1018,6 +1019,7 @@ async function goToShowdown() {
 
   updates['hand/awards']       = awards;
   updates['hand/round']        = 'showdown';
+  updates['hand/showdownAt']   = Date.now();
   // 只有 2 人以上攤牌才翻開整副公共牌；棄牌獲勝保留現狀（可用兔子洞偷看）
   updates['hand/communityCards'] = notFolded.length >= 2 ? communityCards : (hand.communityCards || []);
   updates['hand/autoAwarded']  = true;
@@ -1071,21 +1073,22 @@ function triggerShowdownAnimations(room, hand) {
   });
 }
 
-// ── 自動開始下一局（transaction 防止多客戶端同時觸發）──
+// ── 自動開始下一局 ────────────────────────────────────────
+// 認領用小節點 transaction（值 = 認領時間戳）：
+// - null 是合法的「未認領」狀態，不會誤觸 transaction 首跑 null 的放棄陷阱
+// - 認領逾時 8 秒可被其他端搶佔，認領者當機也不會卡死整桌
 async function autoStartNextHand(expectedHandNum) {
   try {
-    let canStart = false;
-    await dbTransaction(handRef(myRoomCode), (hand) => {
-      if (!hand) return;          // null → abort transaction
-      if (hand.number !== expectedHandNum) return; // 已有新局
-      if (hand.nextHandClaimed) return;             // 已被其他客戶端搶先
-      hand.nextHandClaimed = true;
-      canStart = true;
-      return hand;
+    if (currentRoom?.hand?.number !== expectedHandNum) return; // 已有新局
+    const res = await dbTransaction(nextHandClaimRef(myRoomCode), v => {
+      if (v && Date.now() - v < 8000) return; // 其他端已認領且未逾時 → 放棄
+      return Date.now();
     });
-    if (canStart) await startHand();
+    if (!res?.committed) return;
+    if (currentRoom?.hand?.number !== expectedHandNum) return;
+    await startHand();
   } catch (e) {
-    console.warn('autoStartNextHand transaction error:', e);
+    console.warn('autoStartNextHand error:', e);
   }
 }
 
@@ -1093,6 +1096,22 @@ async function autoStartNextHand(expectedHandNum) {
 function timerTick() {
   const room = currentRoom;
   const hand = room?.hand;
+
+  // 看門狗：攤牌後遲遲沒開下一局（認領者失敗或斷線）→ 任一端重試
+  if (room?.status === 'playing' && hand?.round === 'showdown'
+      && hand.showdownAt && !nextHandRetrying
+      && Date.now() - hand.showdownAt > 10000 + (myPlayerIndex || 0) * 500) {
+    const eligible = Object.values(room.players || {})
+      .filter(p => p?.chips > 0 && p?.isActive !== false && !p?.sitOut).length;
+    if (eligible >= 2) {
+      nextHandRetrying = true;
+      document.getElementById('winner-overlay')?.classList.add('hidden');
+      autoStartNextHand(hand.number).finally(() => {
+        setTimeout(() => { nextHandRetrying = false; }, 5000);
+      });
+    }
+  }
+
   if (!room || room.status !== 'playing' || !hand || hand.round === 'showdown'
       || hand.autoAwarded || !hand.actionStart) { updateTimerUI(null); return; }
   const idx = hand.actionIndex;
