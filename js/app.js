@@ -880,10 +880,21 @@ async function advanceRound(room) {
     return;
   }
 
-  // 重置行動權，設定行動起始位（dealer 後第一位 active）
   const seats = hand.seats;
-  const updates = { 'hand/round': nextRound, 'hand/lastRaiseSize': hand.bigBlind };
   const players = Object.values(room.players);
+
+  // 全下 runout 要在「找下一位行動者」之前檢查：
+  // 全員全下時沒有 active 座位，晚了就會直接跳結算、瞬間翻五張沒有動畫
+  const active   = Object.values(seats).filter(s => s.status === 'active');
+  const allins   = Object.values(seats).filter(s => s.status === 'allin');
+  const notFolded = Object.values(seats).filter(s => s.status !== 'folded');
+  if ((active.length === 0 || (active.length === 1 && allins.length >= 1)) && notFolded.length >= 2) {
+    await runOutBoard(room);
+    return;
+  }
+
+  // 重置行動權，設定行動起始位（dealer 後第一位 active）
+  const updates = { 'hand/round': nextRound, 'hand/lastRaiseSize': hand.bigBlind };
   Object.keys(seats).forEach(i => {
     if (seats[i].status === 'active') updates[`hand/seats/${i}/hasActed`] = false;
   });
@@ -898,15 +909,6 @@ async function advanceRound(room) {
   if (nextRound === 'flop')  updates['hand/communityCards'] = allCom.slice(0, 3);
   if (nextRound === 'turn')  updates['hand/communityCards'] = allCom.slice(0, 4);
   if (nextRound === 'river') updates['hand/communityCards'] = allCom.slice(0, 5);
-
-  // 全下 runout：無人能再行動時，逐街開牌（翻牌→轉牌→河牌）
-  const active   = Object.values(seats).filter(s => s.status === 'active');
-  const allins   = Object.values(seats).filter(s => s.status === 'allin');
-  const notFolded = Object.values(seats).filter(s => s.status !== 'folded');
-  if ((active.length === 0 || (active.length === 1 && allins.length >= 1)) && notFolded.length >= 2) {
-    await runOutBoard(room);
-    return;
-  }
 
   await dbUpdate(roomRef(myRoomCode), updates);
 }
