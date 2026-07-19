@@ -1,14 +1,16 @@
 import {
   initFirebase, roomRef, playersRef, playerRef, handRef, historyRef,
+  chatRef, reactionsRef,
   dbSet, dbGet, dbUpdate, dbListen, dbTransaction, dbPush, serverTimestamp
-} from './firebase.js?v=7';
+} from './firebase.js?v=12';
 
 import {
   showPhase, showToast, renderWaiting,
   renderPlayerList, renderPot, renderActionPanel, renderHistory,
   showFireworks, showLoserText, renderCards,
   showWinnerOverlay, animateDealCards,
-  updateRabbitSection, updateTimerUI
+  updateRabbitSection, updateTimerUI,
+  updateShowBluffSection, showChatBubble, playReaction, renderChatLog
 } from './ui.js?v=12';
 
 import { shuffleDeck } from './cards.js?v=7';
@@ -32,6 +34,11 @@ let autoAdvancing = false;
 let timerInterval = null;
 let timeoutHandling = false;
 let rabbitSeen = false;
+let seenChatKeys = new Set();
+let seenReactionKeys = new Set();
+let eventsPrimed = false;
+let lastInteractAt = 0;      // 互動冷卻（防洗版）
+let throwTargetIdx = null;   // 丟擲目標座位
 
 // ── 初始化 ────────────────────────────────────────────────
 export function init() {
@@ -144,17 +151,65 @@ function bindEvents() {
     if (val > 0) handleAction('raise', val);
   });
 
-  // 座位補充籌碼（爆牌玩家座位上的按鈕）
+  // 座位點擊：補充籌碼 / 丟擲物品選單
   document.getElementById('player-seats').addEventListener('click', e => {
     const btn = e.target.closest('.seat-rebuy-btn');
-    if (btn) handleRebuy(+btn.dataset.playerIndex);
+    if (btn) { handleRebuy(+btn.dataset.playerIndex); return; }
+    // 點對手座位 → 開啟丟擲選單
+    const seat = e.target.closest('.player-seat');
+    if (!seat || seat.classList.contains('empty')) return;
+    const idx = +seat.dataset.seatIndex;
+    if (idx === myPlayerIndex || Number.isNaN(idx)) return;
+    if (currentRoom?.players?.[idx]?.isActive === false) return;
+    e.stopPropagation();
+    openThrowMenu(seat, idx);
   });
 
-  // 結算 overlay：補充籌碼 & 兔子洞
+  // 丟擲選單
+  document.getElementById('throw-menu').addEventListener('click', e => {
+    const item = e.target.closest('.throw-item');
+    if (!item || throwTargetIdx === null) return;
+    sendReaction({ type: 'throw', item: item.dataset.item, to: throwTargetIdx });
+    hideThrowMenu();
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#throw-menu') && !e.target.closest('.player-seat')) hideThrowMenu();
+  });
+
+  // 聊天面板
+  document.getElementById('btn-chat').addEventListener('click', () => {
+    const panel = document.getElementById('chat-panel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden') && currentRoom) {
+      renderChatLog(currentRoom, myPlayerIndex);
+      document.getElementById('chat-input').focus();
+    }
+  });
+  document.getElementById('btn-chat-close').addEventListener('click', () =>
+    document.getElementById('chat-panel').classList.add('hidden'));
+  document.getElementById('btn-chat-send').addEventListener('click', () => {
+    const input = document.getElementById('chat-input');
+    sendChat(input.value);
+    input.value = '';
+  });
+  document.getElementById('chat-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      sendChat(e.target.value);
+      e.target.value = '';
+    }
+  });
+  document.querySelectorAll('.chat-quick').forEach(btn =>
+    btn.addEventListener('click', () => sendChat(btn.textContent)));
+  document.querySelectorAll('.chat-emoji').forEach(btn =>
+    btn.addEventListener('click', () => sendReaction({ type: 'emoji', item: btn.dataset.emoji })));
+
+  // 結算 overlay：補充籌碼 & 兔子洞 & 亮牌嘲諷
   document.getElementById('winner-overlay')?.addEventListener('click', e => {
     const btn = e.target.closest('.btn-rebuy');
     if (btn) handleRebuy(+btn.dataset.playerIndex);
     if (e.target.closest('#btn-rabbit')) revealRabbit();
+    const sb = e.target.closest('.btn-showbluff');
+    if (sb) revealShowBluff(sb.dataset.which);
   });
 
   // 暫離 / 回座
@@ -305,12 +360,73 @@ async function rejoinRoom() {
 // ── 訂閱房間 ──────────────────────────────────────────────
 function subscribeRoom(code) {
   if (unsubscribe) unsubscribe();
+  seenChatKeys = new Set();
+  seenReactionKeys = new Set();
+  eventsPrimed = false;
   unsubscribe = dbListen(roomRef(code), room => {
     if (!room) { clearLocal(); showPhase('home'); return; }
     room.code = code;
     currentRoom = room;
     renderRoom(room);
+    processEvents(room);
   });
+}
+
+// ── 互動事件處理（聊天氣泡 / 丟擲 / 表情）──────────────────
+function processEvents(room) {
+  const chat = room.chat || {};
+  const reactions = room.reactions || {};
+
+  // 首次載入：把既有事件標記為已看過，不重播動畫
+  if (!eventsPrimed) {
+    Object.keys(chat).forEach(k => seenChatKeys.add(k));
+    Object.keys(reactions).forEach(k => seenReactionKeys.add(k));
+    eventsPrimed = true;
+    return;
+  }
+
+  const now = Date.now();
+  let chatChanged = false;
+  Object.entries(chat).forEach(([k, m]) => {
+    if (seenChatKeys.has(k)) return;
+    seenChatKeys.add(k);
+    chatChanged = true;
+    if (now - (m.ts || 0) < 15000) showChatBubble(m);
+  });
+  Object.entries(reactions).forEach(([k, r]) => {
+    if (seenReactionKeys.has(k)) return;
+    seenReactionKeys.add(k);
+    if (now - (r.ts || 0) < 15000) playReaction(r);
+  });
+
+  // 面板開著時同步聊天紀錄
+  if (chatChanged && !document.getElementById('chat-panel').classList.contains('hidden')) {
+    renderChatLog(room, myPlayerIndex);
+  }
+}
+
+// ── 送出互動（含冷卻）────────────────────────────────────
+function interactCooldownOk() {
+  const now = Date.now();
+  if (now - lastInteractAt < 1500) { showToast('慢點，別洗版 😅', 'error'); return false; }
+  lastInteractAt = now;
+  return true;
+}
+
+function sendChat(text) {
+  const t = String(text || '').trim().slice(0, 60);
+  if (!t || !myRoomCode || myPlayerIndex === null) return;
+  if (!interactCooldownOk()) return;
+  const name = currentRoom?.players?.[myPlayerIndex]?.name || '';
+  dbPush(chatRef(myRoomCode), { from: myPlayerIndex, name, text: t, ts: Date.now() })
+    .catch?.(e => console.warn('chat error:', e));
+}
+
+function sendReaction(r) {
+  if (!myRoomCode || myPlayerIndex === null) return;
+  if (!interactCooldownOk()) return;
+  dbPush(reactionsRef(myRoomCode), { ...r, from: myPlayerIndex, ts: Date.now() })
+    .catch?.(e => console.warn('reaction error:', e));
 }
 
 function renderRoom(room) {
@@ -348,6 +464,7 @@ function renderRoom(room) {
         renderHistory(room);
         showPhase('hand');
         updateRabbitSection(hand);
+        updateShowBluffSection(hand, myPlayerIndex, players);
         if (!showdownAnimated) {
           showdownAnimated = true;
           triggerShowdownAnimations(room, hand);
@@ -563,7 +680,13 @@ async function startHand() {
     communityCards: []
   };
 
-  await dbUpdate(roomRef(myRoomCode), { players: updatedPlayers, hand });
+  // 開新局時清空上一局的丟擲/表情事件，並裁剪過長的聊天紀錄
+  const finalUpdate = { players: updatedPlayers, hand, reactions: null };
+  const chatKeys = Object.keys(room.chat || {}).sort();
+  if (chatKeys.length > 60) {
+    chatKeys.slice(0, chatKeys.length - 40).forEach(k => { finalUpdate[`chat/${k}`] = null; });
+  }
+  await dbUpdate(roomRef(myRoomCode), finalUpdate);
 }
 
 // ── 行動處理 ──────────────────────────────────────────────
@@ -957,6 +1080,36 @@ async function revealRabbit() {
   if (!myRoomCode) return;
   try { await dbUpdate(handRef(myRoomCode), { rabbitRevealed: true }); }
   catch (e) { console.warn('rabbit error:', e); }
+}
+
+// ── 亮牌嘲諷：棄牌獲勝者秀底牌給全桌 ──────────────────────
+async function revealShowBluff(which) {
+  const hand = currentRoom?.hand;
+  const my = hand?.holeCards?.[myPlayerIndex];
+  if (!my || !myRoomCode) return;
+  const cards = which === 'both' ? my : [my[+which]];
+  try { await dbUpdate(handRef(myRoomCode), { showBluff: { from: myPlayerIndex, cards } }); }
+  catch (e) { console.warn('showBluff error:', e); }
+}
+
+// ── 丟擲選單 ──────────────────────────────────────────────
+function openThrowMenu(seatEl, idx) {
+  throwTargetIdx = idx;
+  const menu = document.getElementById('throw-menu');
+  menu.classList.remove('hidden');
+  const r = seatEl.getBoundingClientRect();
+  const mw = menu.offsetWidth || 160;
+  let x = r.left + r.width / 2 - mw / 2;
+  x = Math.max(8, Math.min(x, innerWidth - mw - 8));
+  let y = r.bottom + 6;
+  if (y > innerHeight - 64) y = r.top - 50;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+}
+
+function hideThrowMenu() {
+  throwTargetIdx = null;
+  document.getElementById('throw-menu').classList.add('hidden');
 }
 
 // ── 補充籌碼 ──────────────────────────────────────────────

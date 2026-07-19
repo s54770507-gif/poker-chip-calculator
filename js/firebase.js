@@ -33,6 +33,8 @@ export function playerRef(code, idx)    { return ref(db, `rooms/${code}/players/
 export function handRef(code)           { return ref(db, `rooms/${code}/hand`); }
 export function seatRef(code, idx)      { return ref(db, `rooms/${code}/hand/seats/${idx}`); }
 export function historyRef(code)        { return ref(db, `rooms/${code}/history`); }
+export function chatRef(code)           { return ref(db, `rooms/${code}/chat`); }
+export function reactionsRef(code)      { return ref(db, `rooms/${code}/reactions`); }
 
 export async function dbSet(r, val)     { await set(r, val); }
 export async function dbGet(r)          { const s = await get(r); return s.val(); }

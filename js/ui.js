@@ -378,6 +378,121 @@ export function updateRabbitSection(hand) {
   }
 }
 
+// ── 亮牌嘲諷（棄牌獲勝者可秀底牌）──
+export function updateShowBluffSection(hand, myIndex, players) {
+  const el = document.getElementById('wo-showbluff');
+  if (!el) return;
+  const seats = hand?.seats || {};
+  const notFolded = Object.entries(seats).filter(([, s]) => s.status !== 'folded');
+  if (notFolded.length !== 1) { el.innerHTML = ''; return; }  // 只有棄牌獲勝才能秀牌
+  const winnerIdx = +notFolded[0][0];
+
+  if (hand.showBluff) {
+    const name = players[hand.showBluff.from]?.name || `玩家${hand.showBluff.from + 1}`;
+    el.innerHTML = `<div class="wo-rabbit-cards">
+      <span class="rabbit-label">😏 ${name} 秀牌</span>
+      ${(hand.showBluff.cards || []).map(c => cardHTML(c, 'sm')).join('')}
+    </div>`;
+  } else if (winnerIdx === myIndex && hand.holeCards?.[myIndex]) {
+    el.innerHTML = `<div class="wo-showbluff-btns">
+      <button class="btn-rabbit btn-showbluff" data-which="0">😏 秀左牌</button>
+      <button class="btn-rabbit btn-showbluff" data-which="1">秀右牌</button>
+      <button class="btn-rabbit btn-showbluff" data-which="both">全秀</button>
+    </div>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+// ── 座位定位工具（互動動畫用）──
+function seatCenter(idx) {
+  const el = document.querySelector(`.player-seat[data-seat-index="${idx}"]`);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+
+// ── 聊天氣泡（浮在發話者座位旁）──
+export function showChatBubble(msg) {
+  const pos = seatCenter(msg.from);
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble';
+  bubble.textContent = msg.text;
+  if (pos) {
+    bubble.style.left = pos.x + 'px';
+    bubble.style.top = (pos.y - 34) + 'px';
+  } else {
+    bubble.style.left = '50%';
+    bubble.style.top = '18%';
+  }
+  document.body.appendChild(bubble);
+  setTimeout(() => bubble.classList.add('out'), 3200);
+  setTimeout(() => bubble.remove(), 3600);
+}
+
+// ── 播放互動動畫（丟擲 / 表情）──
+export function playReaction(r) {
+  if (r.type === 'throw') {
+    const from = seatCenter(r.from);
+    const to   = seatCenter(r.to);
+    if (!from || !to) return;
+    const el = document.createElement('div');
+    el.className = 'throw-fly';
+    el.textContent = r.item;
+    el.style.cssText = [
+      `left:${from.x}px`, `top:${from.y}px`,
+      `--tx:${(to.x - from.x).toFixed(1)}px`,
+      `--ty:${(to.y - from.y).toFixed(1)}px`,
+    ].join(';');
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => {
+      el.remove();
+      // 命中效果：爆裂 + 目標座位抖動
+      const splat = document.createElement('div');
+      splat.className = 'throw-splat';
+      splat.textContent = r.item === '🥚' ? '🍳' : r.item + '💥';
+      splat.style.left = to.x + 'px';
+      splat.style.top = to.y + 'px';
+      document.body.appendChild(splat);
+      splat.addEventListener('animationend', () => splat.remove(), { once: true });
+      const seatEl = document.querySelector(`.player-seat[data-seat-index="${r.to}"]`);
+      if (seatEl) {
+        seatEl.classList.add('hit-shake');
+        setTimeout(() => seatEl.classList.remove('hit-shake'), 500);
+      }
+    }, { once: true });
+
+  } else if (r.type === 'emoji') {
+    const pos = seatCenter(r.from) || { x: innerWidth / 2, y: innerHeight / 2 };
+    const el = document.createElement('div');
+    el.className = 'emoji-float';
+    el.textContent = r.item;
+    el.style.left = pos.x + 'px';
+    el.style.top = pos.y + 'px';
+    document.body.appendChild(el);
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+  }
+}
+
+// ── 聊天紀錄面板 ──
+export function renderChatLog(room, myIndex) {
+  const log = document.getElementById('chat-log');
+  if (!log) return;
+  const players = Object.values(room?.players || {});
+  const msgs = Object.values(room?.chat || {}).sort((a, b) => (a.ts || 0) - (b.ts || 0)).slice(-40);
+  log.innerHTML = msgs.map(m => {
+    const name = players[m.from]?.name || m.name || '?';
+    const mine = m.from === myIndex;
+    return `<div class="chat-line${mine ? ' mine' : ''}"><b>${escapeHtml(name)}</b>：${escapeHtml(m.text || '')}</div>`;
+  }).join('');
+  log.scrollTop = log.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 // ── 行動計時 UI（由 app.js 計時迴圈每 250ms 呼叫）──
 export function updateTimerUI(t) {
   const label = document.getElementById('timer-countdown');
