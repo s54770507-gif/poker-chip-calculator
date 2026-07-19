@@ -836,7 +836,7 @@ function calcSidePots(seats, players) {
                                   eligible:contributions.filter(s=>s.status!=='folded').map(s=>s.idx) }];
 }
 
-// 歷史紀錄
+// 歷史紀錄 + 賽後戰報
 export function renderHistory(room) {
   const history = Object.values(room.history || {});
   const players = Object.values(room.players || {});
@@ -846,6 +846,36 @@ export function renderHistory(room) {
     const winner = players[h.winnerIndex]?.name || `玩家${h.winnerIndex+1}`;
     return `<tr><td>第${h.handNumber}局</td><td>${winner}</td><td>${h.potSize.toLocaleString()}</td></tr>`;
   }).join('');
+
+  // 戰報：頒獎 + 各玩家淨勝負
+  const panel = document.getElementById('report-panel');
+  if (!panel) return;
+  const stats = room.stats || {};
+  if (!Object.keys(stats).length) { panel.innerHTML = ''; return; }
+
+  const titles = computeTitles(room);
+  const biggest = history.reduce((m, h) => Math.max(m, h.potSize || 0), 0);
+  const biggestHand = history.find(h => h.potSize === biggest);
+
+  const rows = players
+    .map((p, i) => ({ p, i, st: stats[i] }))
+    .filter(({ p, st }) => st && p?.isActive !== false)
+    .map(({ p, i, st }) => {
+      const net = (st.chipsOut || 0) - (st.chipsIn || 0);
+      const netCls = net > 0 ? 'net-pos' : net < 0 ? 'net-neg' : '';
+      const titleHtml = (titles[i] || []).map(t => `<span class="title-chip">${t.emoji} ${t.label}</span>`).join('');
+      return `<div class="report-row">
+        <span class="report-name">${p.name}${titleHtml}</span>
+        <span class="report-detail">勝 ${st.handsWon || 0}/${st.handsPlayed || 0} · 全下 ${st.allins || 0}</span>
+        <span class="report-net ${netCls}">${net > 0 ? '+' : ''}${net.toLocaleString()}</span>
+      </div>`;
+    }).join('');
+
+  panel.innerHTML = `<div class="report-box">
+    <div class="report-title">📊 本日戰報</div>
+    ${biggest > 0 ? `<div class="report-highlight">💥 最大底池：第 ${biggestHand?.handNumber} 局 · ${biggest.toLocaleString()}</div>` : ''}
+    ${rows}
+  </div>`;
 }
 
 // ── 煙火慶祝動畫 ──

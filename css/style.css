@@ -490,6 +490,40 @@ input:focus { border-color: var(--red); }
   margin-left: 6px;
 }
 
+/* ── 賽後戰報 ── */
+.report-box {
+  background: #131313;
+  border: 1px solid #2b2b2b;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+.report-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+.report-highlight {
+  font-size: 12px;
+  color: #ffb84d;
+  margin-bottom: 8px;
+}
+.report-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid #1f1f1f;
+  font-size: 12px;
+}
+.report-row:last-child { border-bottom: none; }
+.report-name { flex: 1; font-weight: 600; }
+.report-detail { color: var(--text-dim); font-size: 11px; }
+.report-net { font-weight: 700; min-width: 60px; text-align: right; }
+.report-net.net-pos { color: #43d17a; }
+.report-net.net-neg { color: #ff5252; }
+
 /* 行動面板 */
 #action-area {
   flex-shrink: 0;
