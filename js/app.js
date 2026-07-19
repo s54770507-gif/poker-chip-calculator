@@ -11,7 +11,7 @@ import {
   showWinnerOverlay, animateDealCards,
   updateRabbitSection, updateTimerUI,
   updateShowBluffSection, showChatBubble, playReaction, renderChatLog
-} from './ui.js?v=14';
+} from './ui.js?v=16';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
@@ -140,11 +140,12 @@ function bindEvents() {
   document.getElementById('btn-raise-toggle').addEventListener('click', toggleRaisePanel);
   document.getElementById('btn-raise-cancel').addEventListener('click', toggleRaisePanel);
 
-  document.querySelectorAll('.raise-preset').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const amount = +btn.dataset.amount;
-      if (amount > 0) handleAction('raise', amount);
-    });
+  // 加注尺寸列（動態生成 → 用事件委派）
+  document.getElementById('raise-presets').addEventListener('click', e => {
+    const btn = e.target.closest('.raise-preset');
+    if (!btn) return;
+    const amount = +btn.dataset.amount;
+    if (amount > 0) handleAction('raise', amount);
   });
 
   document.getElementById('btn-raise-confirm').addEventListener('click', () => {

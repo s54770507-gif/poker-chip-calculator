@@ -185,9 +185,10 @@ export function renderPlayerList(room, hand, myIndex) {
   }
 }
 
-// 底池 + 輪次（更新牌桌中央 + header）
+// 底池 + 輪次（更新牌桌中央 + header；總底池含桌上未收注，同 N8）
 export function renderPot(hand) {
-  const amount = hand?.pot || 0;
+  const liveBets = Object.values(hand?.seats || {}).reduce((s, x) => s + (x?.bet || 0), 0);
+  const amount = (hand?.pot || 0) + liveBets;
   const pot = amount.toLocaleString();
   const el = document.getElementById('table-pot-val');
   if (el) el.textContent = pot;
@@ -729,32 +730,54 @@ export function renderActionPanel(room, hand, myIndex) {
   btnRaise.style.display = canRaise ? 'block' : 'none';
   if (!canRaise) { raisePanel.classList.add('hidden'); return; }
 
-  // 加注尺寸（都是「加注到」的總額）
+  // 加注尺寸（都是「加注到」的總額，N8 式階梯）
   const minRaiseTo = currentBet > 0 ? currentBet + (hand?.lastRaiseSize || bb) : bb;
   const potRaiseTo = currentBet + callAmount + totalPot; // 底池加注 = 跟注後再加一個底池
 
-  const presets = currentBet === 0
-    ? [
-        { label: '1/3 底池', amt: Math.round(totalPot / 3) },
-        { label: '1/2 底池', amt: Math.round(totalPot / 2) },
-        { label: '底池',     amt: totalPot },
-        { label: '全下',     amt: myTotal, allin: true },
-      ]
-    : [
-        { label: '最小加注', amt: minRaiseTo },
-        { label: '3 倍',     amt: currentBet * 3 },
-        { label: '底池加注', amt: potRaiseTo },
-        { label: '全下',     amt: myTotal, allin: true },
-      ];
+  let ladder;
+  if (currentBet === 0) {
+    // 翻牌後無人下注
+    ladder = [
+      { label: '1/3 底池', amt: Math.round(totalPot / 3) },
+      { label: '1/2 底池', amt: Math.round(totalPot / 2) },
+      { label: '2/3 底池', amt: Math.round(totalPot * 2 / 3) },
+      { label: '底池',     amt: totalPot },
+      { label: '全下',     amt: myTotal, allin: true },
+    ];
+  } else if (currentBet <= bb) {
+    // 翻牌前無人加注
+    ladder = [
+      { label: '2 大盲',   amt: bb * 2 },
+      { label: '3 大盲',   amt: bb * 3 },
+      { label: '4 大盲',   amt: bb * 4 },
+      { label: '底池',     amt: potRaiseTo },
+      { label: '全下',     amt: myTotal, allin: true },
+    ];
+  } else {
+    // 面對加注
+    ladder = [
+      { label: '最小加注', amt: minRaiseTo },
+      { label: '2.5 倍',   amt: Math.round(currentBet * 2.5) },
+      { label: '3 倍',     amt: currentBet * 3 },
+      { label: '底池',     amt: potRaiseTo },
+      { label: '全下',     amt: myTotal, allin: true },
+    ];
+  }
 
-  const ids = ['raise-p33', 'raise-p50', 'raise-p100', 'raise-allin'];
-  presets.forEach((p, k) => {
+  // 夾限 + 去重（不同公式算出同額時只留一列）
+  const seen = new Set();
+  const rows = [];
+  ladder.forEach(p => {
     const amt = Math.min(Math.max(p.amt, Math.min(minRaiseTo, myTotal)), myTotal);
-    const btn = document.getElementById(ids[k]);
-    btn.dataset.amount = amt;
+    if (seen.has(amt)) return;
+    seen.add(amt);
     const hitAllin = amt >= myTotal;
-    btn.innerHTML = `<span>${p.label}</span><small>${hitAllin && !p.allin ? '全下' : amt.toLocaleString()}</small>`;
+    rows.push(`<button class="raise-preset" data-amount="${amt}">
+      <span class="rp-label">${hitAllin ? '全下' : p.label}</span>
+      <span class="rp-amt">${amt.toLocaleString()}</span>
+    </button>`);
   });
+  document.getElementById('raise-presets').innerHTML = rows.join('');
 }
 
 // 攤牌畫面（自動結算結果）
