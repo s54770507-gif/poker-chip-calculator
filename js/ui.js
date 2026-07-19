@@ -689,7 +689,9 @@ export function renderActionPanel(room, hand, myIndex) {
   document.getElementById('actor-label').className = isMyTurn ? 'actor-label my-turn' : 'actor-label';
 
   panel.style.display = isMyTurn ? 'grid' : 'none';
-  document.getElementById('waiting-msg').style.display = isMyTurn ? 'none' : 'block';
+  const wm = document.getElementById('waiting-msg');
+  wm.style.display = isMyTurn ? 'none' : 'block';
+  wm.textContent = '等待中...';
 
   // 沒輪到我：收合加注面板，避免殘留上一輪的尺寸
   if (!isMyTurn) { raisePanel.classList.add('hidden'); return; }

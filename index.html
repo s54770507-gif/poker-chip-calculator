@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0a0a0a">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>德州撲克籌碼計算器</title>
-  <link rel="stylesheet" href="css/style.css?v=16">
+  <link rel="stylesheet" href="css/style.css?v=17">
 </head>
 <body>
 
@@ -274,6 +275,12 @@
   </div>
 </div>
 
+<!-- 暫離提示橫幅 -->
+<div id="sitout-banner" class="sitout-banner hidden">
+  <span>⏸ 你已暫離，不會參與新的一局</span>
+  <button id="btn-sit-in">立即回座</button>
+</div>
+
 <!-- 互動 / 聊天面板 -->
 <div id="chat-panel" class="chat-panel hidden">
   <div class="chat-head">
@@ -315,6 +322,6 @@
 
 <div id="toast"></div>
 
-<script type="module" src="js/app.js?v=16"></script>
+<script type="module" src="js/app.js?v=17"></script>
 </body>
 </html>

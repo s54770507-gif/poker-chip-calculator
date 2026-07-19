@@ -1278,6 +1278,37 @@ input:focus { border-color: var(--red); }
 }
 .player-seat.hit-shake .seat-inner { animation: hitShake 0.45s; }
 
+/* ── 暫離橫幅 ── */
+.sitout-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #1d1400;
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--gold);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+}
+.sitout-banner.hidden { display: none; }
+.sitout-banner button {
+  background: var(--gold);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 /* ── 表情浮出 ── */
 @keyframes emojiFloat {
   0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }

@@ -11,7 +11,7 @@ import {
   showWinnerOverlay, animateDealCards,
   updateRabbitSection, updateTimerUI,
   updateShowBluffSection, showChatBubble, playReaction, renderChatLog
-} from './ui.js?v=16';
+} from './ui.js?v=17';
 
 import { shuffleDeck } from './cards.js?v=7';
 import { bestHand, compareHands } from './eval.js?v=7';
@@ -215,15 +215,18 @@ function bindEvents() {
   });
 
   // 暫離 / 回座
-  document.getElementById('btn-sitout').addEventListener('click', async () => {
+  const setSitOut = async (newVal) => {
     if (!myRoomCode || myPlayerIndex === null) return;
-    const me = currentRoom?.players?.[myPlayerIndex];
-    const newVal = !(me?.sitOut === true);
     try {
       await dbUpdate(roomRef(myRoomCode), { [`players/${myPlayerIndex}/sitOut`]: newVal });
       showToast(newVal ? '已暫離，下一局起自動跳過' : '已回座，下一局加入', 'info');
     } catch (e) { console.warn('sitout error:', e); }
+  };
+  document.getElementById('btn-sitout').addEventListener('click', () => {
+    const me = currentRoom?.players?.[myPlayerIndex];
+    setSitOut(!(me?.sitOut === true));
   });
+  document.getElementById('btn-sit-in').addEventListener('click', () => setSitOut(false));
   document.getElementById('showdown-chips').addEventListener('click', e => {
     const btn = e.target.closest('.btn-rebuy');
     if (!btn) return;
@@ -439,14 +442,15 @@ function renderRoom(room) {
   const codeBadge = document.getElementById('room-code-badge');
   if (codeBadge) codeBadge.textContent = room.code || myRoomCode || '';
 
-  // 暫離按鈕狀態
+  // 暫離按鈕與醒目橫幅狀態
+  const sitting = players[myPlayerIndex]?.sitOut === true;
   const sitBtn = document.getElementById('btn-sitout');
   if (sitBtn) {
-    const sitting = players[myPlayerIndex]?.sitOut === true;
     sitBtn.textContent = sitting ? '▶' : '⏸';
     sitBtn.title = sitting ? '回座（下一局加入）' : '暫離（下一局起自動跳過）';
     sitBtn.classList.toggle('sitting', sitting);
   }
+  document.getElementById('sitout-banner')?.classList.toggle('hidden', !sitting);
 
   const hand = room.hand;
   switch (room.status) {
@@ -469,7 +473,18 @@ function renderRoom(room) {
         document.getElementById('action-buttons').style.display = 'none';
         document.getElementById('raise-panel').classList.add('hidden');
         document.getElementById('actor-label').style.display = 'none';
-        document.getElementById('waiting-msg').style.display = 'none';
+        // 可開局人數不足時，明確告知在等什麼（回座 / 補碼後看門狗會自動開局）
+        {
+          const wm = document.getElementById('waiting-msg');
+          const eligibleCnt = players.filter(p =>
+            p?.chips > 0 && p?.isActive !== false && !p?.sitOut).length;
+          if (eligibleCnt < 2) {
+            wm.style.display = 'block';
+            wm.textContent = '⏳ 等待玩家回座或補充籌碼，湊滿 2 人自動開始下一局...';
+          } else {
+            wm.style.display = 'none';
+          }
+        }
         updateRabbitSection(hand);
         updateShowBluffSection(hand, myPlayerIndex, players);
         if (!showdownAnimated) {
