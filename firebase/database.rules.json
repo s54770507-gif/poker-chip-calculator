@@ -1,0 +1,64 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "rooms": {
+      "$code": {
+        ".validate": "$code.matches(/^[A-Z0-9]{6}$/)",
+        ".read": true,
+        ".write": true,
+
+        "code": {
+          ".validate": "newData.isString() && newData.val() == $code"
+        },
+        "status": {
+          ".validate": "newData.isString() && newData.val().matches(/^(waiting|playing|finished)$/)"
+        },
+        "createdAt": { ".validate": "newData.isNumber()" },
+
+        "config": {
+          "playerCount":   { ".validate": "newData.isNumber() && newData.val() >= 2 && newData.val() <= 10" },
+          "startingChips": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000000" },
+          "smallBlind":    { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "bigBlind":      { ".validate": "newData.isNumber() && newData.val() >= 0" },
+          "bbAnte":        { ".validate": "newData.isBoolean()" },
+          "straddle":      { ".validate": "newData.isBoolean()" },
+          "$other":        { ".validate": false }
+        },
+
+        "players": {
+          "$idx": {
+            "name":     { ".validate": "newData.isString() && newData.val().length <= 30" },
+            "chips":    { ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 1000000000" },
+            "isActive": { ".validate": "newData.isBoolean()" },
+            "sitOut":   { ".validate": "newData.isBoolean()" },
+            "timeBank": { ".validate": "newData.isNumber() && newData.val() >= -3600 && newData.val() <= 3600" },
+            "avatar":   { ".validate": "newData.isString() && newData.val().length <= 60000" }
+          }
+        },
+
+        "chat": {
+          "$msgId": {
+            "from": { ".validate": "newData.isNumber()" },
+            "name": { ".validate": "newData.isString() && newData.val().length <= 30" },
+            "text": { ".validate": "newData.isString() && newData.val().length <= 200" },
+            "ts":   { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        },
+
+        "reactions": {
+          "$reactId": {
+            "type": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "item": { ".validate": "newData.isString() && newData.val().length <= 20" },
+            "from": { ".validate": "newData.isNumber()" },
+            "to":   { ".validate": "newData.isNumber()" },
+            "ts":   { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        }
+      }
+    }
+  }
+}
